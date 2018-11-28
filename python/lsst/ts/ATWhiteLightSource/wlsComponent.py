@@ -5,36 +5,11 @@ import time
 import wlsExceptions
 
 class WhiteLightSourceComponent():
+""" Class that handles communication with the white light source hardware
+"""
 
     def __init__(self, ip='140.252.33.160', port=502):
         self.client = ModbusClient(ip,port)
-        self.startupWattage = 1200
-        self.defaultWattage = 800
-        self.startupTime = 2
-        self.bulbHours = None #Read this from EFD when we initialize
-        self.bulbWattHours = None # This too
-        self.bulbCount = None #how many bulbs have there been in total?
-
-    def powerLightOn(self):
-        """ Signals the Horiba device to power light on.
-            We always set the brightness to self.startupWattage for a
-            moment (self.startupTime), then step it back down to the 
-            800w default.
-
-            Parameters
-            ----------
-            None
-
-            Returns
-            -------
-            None
-        """
-        startupVoltage = self._wattsToVolts(self.startupWattage)
-        targetVoltage = self._wattsToVolts(self.defaultWattage)
-        
-        self._writeVoltage(startupVoltage)
-        time.sleep(self.startupTime)
-        self._writeVoltage(targetVoltage)
 
     def setLightPower(self, watts):
         """ Sets the brightness (in watts) on the white light source.

@@ -5,8 +5,8 @@ import wlsExceptions
 
 class WhiteLightSourceComponentSimulator():
     """ A fake version of the White Light Source component that doesn't
-        communicate with hardware at all but prints the current wattage
-        of the WLS Bulb.
+        communicate with hardware at all but prints the wattage output
+        of a simulated WLS Bulb.
     """
 
     def __init__(self, ip='140.252.33.160', port=502):
@@ -17,23 +17,6 @@ class WhiteLightSourceComponentSimulator():
         self.bulbWattHours = None # This too
         self.bulbCount = None #how many bulbs have there been in total?
         self.bulbState = 0 
-
-    def powerLightOn(self):
-        """ Signals the Horiba device to power light on
-
-            Parameters
-            ----------
-            None
-
-            Returns
-            -------
-            None
-        """
-        self.bulbState = self.startupWattage
-        print("WLS bulb set to "+ str(self.bulbState) + " watts.")
-        time.sleep(self.startupTime)
-        self.bulbState = self.defaultWattage
-        print("WLS bulb set to "+ str(self.bulbState) + " watts.")
 
     def setLightPower(self, watts):
         """ Sets the brightness (in watts) on the white light source.
@@ -52,5 +35,8 @@ class WhiteLightSourceComponentSimulator():
         """
         
         self.bulbState = watts
-        print("WLS bulb set to "+ str(self.bulbState) + " watts.")
-        
+        self._printBulbState()
+    
+    def _printBulbState(self):
+        print("Simulated WLS bulb set to " + str(self.bulbState) + " watts.")
+
