@@ -27,7 +27,7 @@ class WhiteLightSourceComponent():
         """
         pass
 
-    def powerLightOff():
+    def powerLightOff(self):
         """ Signals the Horiba device to power light off. After
             powering off, light cannot be powered on for 5 mins
 
@@ -57,15 +57,12 @@ class WhiteLightSourceComponent():
             None
         """
         
-        if watts < 800: raise wlsExceptions.WattageTooLowException
-        elif watts > 1200: raise wlsExceptions.WattageTooHighException
-        else:
-            startupVoltage = self._wattsToVolts(self.startupWattage)
-            targetVoltage = self._wattsToVolts(watts)
-            
-            self._writeVoltage(startupVoltage)
-            time.sleep(self.startupTime)
-            self._writeVoltage(targetVoltage)
+        startupVoltage = self._wattsToVolts(self.startupWattage)
+        targetVoltage = self._wattsToVolts(watts)
+        
+        self._writeVoltage(startupVoltage)
+        time.sleep(self.startupTime)
+        self._writeVoltage(targetVoltage)
 
 
     def _wattsToVolts(self, watts):
