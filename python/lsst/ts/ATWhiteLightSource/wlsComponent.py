@@ -36,20 +36,6 @@ class WhiteLightSourceComponent():
         time.sleep(self.startupTime)
         self._writeVoltage(targetVoltage)
 
-    def powerLightOff(self):
-        """ Signals the Horiba device to power light off. After
-            powering off, light cannot be powered on for 5 mins
-
-            Parameters
-            ----------
-            None
-
-            Returns
-            -------
-            None
-        """
-        pass
-
     def setLightPower(self, watts):
         """ Sets the brightness (in watts) on the white light source.
             

@@ -8,7 +8,7 @@ class WhiteLightSourceModel():
         self.component = WhiteLightSourceComponentSimulator()
 
     def powerLightOn(self):
-        self.component.setLightPower(self.component.defaultWattage)
+        self.component.powerLightOn()
     
     def powerLightOff(self):
         self.component.setLightPower(0)
