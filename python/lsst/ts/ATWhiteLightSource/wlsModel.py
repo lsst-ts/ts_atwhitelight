@@ -44,7 +44,7 @@ class WhiteLightSourceModel():
         
     
     
-    def setLightPower(self, watts):
+    async def setLightPower(self, watts):
         """ Sets the brightness (in watts) on the white light source.
 
             Parameters

@@ -8,14 +8,14 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         super(SALPY_WhiteLightSource)
         self.model = WhiteLightSourceModel()
 
-    def do_powerLightOn(self):
+    async def do_powerLightOn(self):
         self.assert_enabled("powerLightOn")
         self.model.powerLightOn()
 
-    def do_powerLightOff(self):
-        self.model.powerLightOff()
+    async def do_powerLightOff(self):
+        await self.model.setLightPower(0)
 
-    def do_setLightPower(self, watts):
+    async def do_setLightPower(self, watts):
         self.assert_enabled("setLightPower")
-        self.model.setLightPower(watts)
+        await self.model.setLightPower(watts)
 
