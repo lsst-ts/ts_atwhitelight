@@ -1,6 +1,5 @@
 from lsst.ts.ATWhiteLightSource.wlsComponent import WhiteLightSourceComponent
 from lsst.ts.ATWhiteLightSource.wlsSimComponent import WhiteLightSourceComponentSimulator
-import wlsExceptions
 import time
 import asyncio
 
@@ -44,28 +43,20 @@ class WhiteLightSourceModel():
         self.component.setLightPower(self.defaultWattage)
         
     
-    def powerLightOff(self):
-        
-        if not self.on_task.done():
-            self.on_task.cancel()
-        self.component.setLightPower(0)
     
     def setLightPower(self, watts):
         """ Sets the brightness (in watts) on the white light source.
-            We always set the brightness to self.startupWattage for a
-            moment (self.startupTime), then step it back down to the 
-            target wattage.
 
             Parameters
             ----------
             watts : int or float
-                Should be in the range of 800-1200 (inclusive)
+                Should be <= 1200. Values under 800 power the light off entirely. 
 
             Returns
             -------
             None
         """
-        # TODO: report watts as telemetry
+        # TODO: report watts as telemetry (or events?)
         if watts > 1200: 
             raise salobj.ExpectedException(f"Wattage {watts} too high (over 1200)")
         if watts < 800:
