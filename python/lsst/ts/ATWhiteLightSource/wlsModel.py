@@ -8,13 +8,12 @@ class WhiteLightSourceModel():
         self.component = WhiteLightSourceComponentSimulator()
 
     def powerLightOn(self):
-        self.component.powerLightOn()
+        self.component.setLightPower(self.component.defaultWattage)
     
     def powerLightOff(self):
-        self.component.powerLightOff()
+        self.component.setLightPower(0)
     
     def setLightPower(self, watts):
-        if watts < 800: raise wlsExceptions.WattageTooLowException
-        elif watts > 1200: raise wlsExceptions.WattageTooHighException
+        if watts > 1200: raise wlsExceptions.WattageTooHighException
         else:
             self.component.setLightPower(watts)

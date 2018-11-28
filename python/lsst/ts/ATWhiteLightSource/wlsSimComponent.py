@@ -12,6 +12,7 @@ class WhiteLightSourceComponentSimulator():
     def __init__(self, ip='140.252.33.160', port=502):
         self.startupWattage = 1200
         self.startupTime = 2
+        self.defaultWattage = 800
         self.bulbHours = None #Read this from EFD when we initialize
         self.bulbWattHours = None # This too
         self.bulbCount = None #how many bulbs have there been in total?
@@ -28,22 +29,10 @@ class WhiteLightSourceComponentSimulator():
             -------
             None
         """
-        self.bulbState = 800
+        self.bulbState = self.startupWattage
         print("WLS bulb set to "+ str(self.bulbState) + " watts.")
-
-    def powerLightOff(self):
-        """ Signals the Horiba device to power light off. After
-            powering off, light cannot be powered on for 5 mins
-
-            Parameters
-            ----------
-            None
-
-            Returns
-            -------
-            None
-        """
-        self.bulbState = 0
+        time.sleep(self.startupTime)
+        self.bulbState = self.defaultWattage
         print("WLS bulb set to "+ str(self.bulbState) + " watts.")
 
     def setLightPower(self, watts):
@@ -62,9 +51,6 @@ class WhiteLightSourceComponentSimulator():
             None
         """
         
-        self.bulbState = self.startupWattage
-        print("WLS bulb set to "+ str(self.bulbState) + " watts.")
-        time.sleep(self.startupTime)
         self.bulbState = watts
         print("WLS bulb set to "+ str(self.bulbState) + " watts.")
         
