@@ -1,22 +1,21 @@
-import logging
-import pymodbus
+__all__ = ["WhiteLightSourceComponent"]
+
 from pymodbus.client.sync import ModbusTcpClient as ModbusClient
-import time
-import wlsExceptions
+
 
 class WhiteLightSourceComponent():
     """ Class that handles communication with the white light source hardware
     """
 
     def __init__(self, ip='140.252.33.160', port=502):
-        self.client = ModbusClient(ip,port)
-        self.bulbHours = None #Read this from EFD when we initialize
-        self.bulbWattHours = None # This too
-        self.bulbCount = None #how many bulbs have there been in total?
+        self.client = ModbusClient(ip, port)
+        self.bulbHours = None  # Read this from EFD when we initialize
+        self.bulbWattHours = None  # This too
+        self.bulbCount = None  # how many bulbs have there been in total?
 
     def setLightPower(self, watts):
         """ Sets the brightness (in watts) on the white light source.
-            
+
 
             Parameters
             ----------
@@ -27,21 +26,20 @@ class WhiteLightSourceComponent():
             -------
             None
         """
-        
+
         targetVoltage = self._wattsToVolts(watts)
         self._writeVoltage(targetVoltage)
 
-
     def _wattsToVolts(self, watts):
         """ calculates what voltage to send (in the range of 1.961v to 5.0v)
-            in order to achieve the desired watt output (in the range of 
+            in order to achieve the desired watt output (in the range of
             800w to 1200w) from the Horiba Kiloarc device.
 
         Parameters
         ----------
         watts : float
             desired wattage for the bulb
-        
+
         Returns
         -------
         volts : float
@@ -57,15 +55,14 @@ class WhiteLightSourceComponent():
         ----------
         volts : float
             voltage we want to send out on the ADAM output
-        
+
         Returns
         -------
         None
 
         """
-        self.client.write_register(10,self._voltsToCounts(volts))
-        
-    
+        self.client.write_register(10, self._voltsToCounts(volts))
+
     def _voltsToCounts(self, volts):
         """ discretizes volts for 12-bit ADAM-6024 output
 
@@ -73,7 +70,7 @@ class WhiteLightSourceComponent():
         ----------
         volts : float
             voltage we want to send out on the ADAM output
-        
+
         Returns
         -------
         counts : integer
@@ -90,7 +87,7 @@ class WhiteLightSourceComponent():
         ----------
         counts : integer
             16-bit integer received from ADAM device
-        
+
         Returns
         -------
         volts : float
