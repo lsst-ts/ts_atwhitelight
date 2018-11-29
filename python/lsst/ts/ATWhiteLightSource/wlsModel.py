@@ -1,5 +1,5 @@
-from lsst.ts.ATWhiteLightSource.wlsComponent import WhiteLightSourceComponent
-from lsst.ts.ATWhiteLightSource.wlsSimComponent import WhiteLightSourceComponentSimulator
+#from wlsComponent import WhiteLightSourceComponent
+from wlsSimComponent import WhiteLightSourceComponentSimulator
 import time
 import asyncio
 

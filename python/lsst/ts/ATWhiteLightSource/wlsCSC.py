@@ -1,6 +1,6 @@
 from lsst.ts import salobj
-import SALPY_WhiteLightSource #from salgenerator
-from lsst.ts.ATWhiteLightSource.wlsModel import WhiteLightSourceModel
+import SALPY_ATWhiteLight #from salgenerator
+from wlsModel import WhiteLightSourceModel
 
 
 class WhiteLightSourceCSC(salobj.BaseCsc):

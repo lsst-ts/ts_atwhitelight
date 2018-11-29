@@ -1,16 +1,18 @@
-from wlsModel import WhiteLightSourceModel
+from wlsCSC import WhiteLightSourceCSC
+import asyncio
 
-def TestPowerOn():
-    model = WhiteLightSourceModel()
+async def TestPowerOn():
+    csc = WhiteLightSourceCSC()
+    await csc.do_powerLightOn()
+    assert csc.model.component.bulbState == 800
 
-def TestTooHighWattage():
+async def TestPowerOff():
     model = WhiteLightSourceModel()
+    await model.powerLightOn()
+    await model.powerLightOff()
+    assert model.component.bulbState == 0
 
-def TestLowWattagePowerOff():
-    model = WhiteLightSourceModel()
 
-def TestWarmUpPowerOffInterrupt(): # if we ask for < 800w during the warmup period, cancel warmup and power off
-    model = WhiteLightSourceModel()
-
-def TestWarmUpNotOtherwiseInterruptable(): # if we ask for 800-1200 watts during the warmup period, it should be ignored
-    model = WhiteLightSourceModel()
+if __name__ == "__main__":
+    asyncio.get_event_loop().run_until_complete(TestPowerOn())
+    asyncio.get_event_loop().run_until_complete(TestPowerOff())

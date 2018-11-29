@@ -5,8 +5,8 @@ import time
 import wlsExceptions
 
 class WhiteLightSourceComponent():
-""" Class that handles communication with the white light source hardware
-"""
+    """ Class that handles communication with the white light source hardware
+    """
 
     def __init__(self, ip='140.252.33.160', port=502):
         self.client = ModbusClient(ip,port)
