@@ -22,6 +22,7 @@ class WhiteLightSourceModel():
         self.off_task = done_task
         self.bulb_on = False
         self.off_time = None
+        self.cooldownPeriod = 300
 
     async def powerLightOn(self):
         """ Signals the Horiba device to power light on.
@@ -39,9 +40,9 @@ class WhiteLightSourceModel():
         """
         if not self.off_task.done():  # are we in the cooldown period?
             elapsed = time.time() - self.off_time
-            remaining = 300 - elapsed
+            remaining = self.cooldownPeriod - elapsed
             description = "Can't power on bulb during cool-off period. Please wait "
-            raise salobj.ExpectedException(description + str(remaining) + " seconds.")
+            raise salobj.ExpectedError(description + str(remaining) + " seconds.")
         self.component.setLightPower(self.startupWattage)
         self.bulb_on = True
         self.on_task = asyncio.ensure_future(asyncio.sleep(self.startupTime))
@@ -62,20 +63,20 @@ class WhiteLightSourceModel():
         """
         # TODO: report watts as telemetry (or events?)
         if watts > 1200:
-            raise salobj.ExpectedException(f"Wattage {watts} too high (over 1200)")
+            raise salobj.ExpectedError(f"Wattage {watts} too high (over 1200)")
         if watts < 800:
             # turn bulb off
             if not self.on_task.done():
                 # if we're in the middle of powering on, cancel that task.
                 self.on_task.cancel()
             if self.bulb_on:
-                self.off_task = asyncio.ensure_future(asyncio.sleep(300))
+                self.off_task = asyncio.ensure_future(asyncio.sleep(self.cooldownPeriod))
                 self.component.setLightPower(0)
                 self.bulb_on = False
                 self.off_time = time.time()
         else:
             if self.bulb_on is False:
-                raise salobj.ExpectedException("Bulb is already off")
+                raise salobj.ExpectedError("Bulb is already off")
             await self.on_task
             self.component.setLightPower(watts)
             self.bulb_on = True
