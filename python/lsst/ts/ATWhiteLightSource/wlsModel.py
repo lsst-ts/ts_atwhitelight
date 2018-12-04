@@ -74,9 +74,14 @@ class WhiteLightSourceModel():
                 self.component.setLightPower(0)
                 self.bulb_on = False
                 self.off_time = time.time()
-        else:
-            if self.bulb_on is False:
+            else:
                 raise salobj.ExpectedError("Bulb is already off")
-            await self.on_task
-            self.component.setLightPower(watts)
-            self.bulb_on = True
+        else:
+            # this executes when watts are inside the 800-1200 range
+            if not self.on_task.done():
+                await self.on_task
+                self.component.setLightPower(watts)
+                self.bulb_on = True
+            else:
+                self.component.setLightPower(watts)
+                self.bulb_on = True
