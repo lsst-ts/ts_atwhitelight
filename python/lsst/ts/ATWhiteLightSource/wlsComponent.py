@@ -31,7 +31,7 @@ class WhiteLightSourceComponent():
         self._writeVoltage(targetVoltage)
 
     def checkErrors(self):
-        """ checks 4 analog inputs to see if any of them have 
+        """ checks 4 analog inputs to see if any of them have
             voltages in excess of 3.0. If so, that's an error!
 
         Parameters
@@ -46,7 +46,7 @@ class WhiteLightSourceComponent():
         errors = [False, False, False, False]
         for i in range(4):
             errors[i] = self._readVoltage(i) > 3.0
-        
+
         return errors
 
     def _wattsToVolts(self, watts):
@@ -80,7 +80,7 @@ class WhiteLightSourceComponent():
         volts : float
             the voltage on this particular ADAM input channel
         """
-        readout = self.client.read_input_registers(channel,1, unit=1).registers[0]
+        readout = self.client.read_input_registers(channel, 1, unit=1).registers[0]
         return self._countsToVolts(readout)
 
     def _writeVoltage(self, volts):

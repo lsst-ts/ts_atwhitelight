@@ -19,10 +19,11 @@ class WhiteLightSourceModel():
         done_task = asyncio.Future()
         done_task.set_result(None)
         self.on_task = done_task
-        self.warmup = done_task
-        self.off_task = done_task
+        self.warmup_task = done_task
+        self.cooldown_task = done_task
         self.bulb_on = False
         self.off_time = None
+        self.on_time = None
         self.cooldownPeriod = 900
         self.warmupPeriod = 900
 
@@ -40,12 +41,16 @@ class WhiteLightSourceModel():
             -------
             None
         """
-        if not self.off_task.done():  # are we in the cooldown period?
+        if not self.cooldown_task.done():  # are we in the cooldown period?
             elapsed = time.time() - self.off_time
             remaining = self.cooldownPeriod - elapsed
             description = "Can't power on bulb during cool-off period. Please wait "
             raise salobj.ExpectedError(description + str(remaining) + " seconds.")
+        if self.bulb_on:
+            raise salobj.ExpectedError("Can't power on when we're already powered on.")
         self.component.setLightPower(self.startupWattage)
+        self.on_time = time.time()
+        self.warmup_task = asyncio.ensure_future(asyncio.sleep(self.warmupPeriod))
         self.bulb_on = True
         self.on_task = asyncio.ensure_future(asyncio.sleep(self.startupTime))
         await self.on_task
@@ -68,11 +73,13 @@ class WhiteLightSourceModel():
             raise salobj.ExpectedError(f"Wattage {watts} too high (over 1200)")
         if watts < 800:
             # turn bulb off
-            if not self.on_task.done():
-                # if we're in the middle of powering on, cancel that task.
-                self.on_task.cancel()
+            if not self.warmup_task.done():
+                description = "Can't power off bulb during warm-up period. Please wait "
+                elapsed = time.time() - self.on_time
+                remaining = self.warmupPeriod - elapsed
+                raise salobj.ExpectedError(description + str(remaining) + " seconds.")
             if self.bulb_on:
-                self.off_task = asyncio.ensure_future(asyncio.sleep(self.cooldownPeriod))
+                self.cooldown_task = asyncio.ensure_future(asyncio.sleep(self.cooldownPeriod))
                 self.component.setLightPower(0)
                 self.bulb_on = False
                 self.off_time = time.time()
