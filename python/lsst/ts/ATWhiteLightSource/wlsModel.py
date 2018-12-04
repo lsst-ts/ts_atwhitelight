@@ -19,10 +19,12 @@ class WhiteLightSourceModel():
         done_task = asyncio.Future()
         done_task.set_result(None)
         self.on_task = done_task
+        self.warmup = done_task
         self.off_task = done_task
         self.bulb_on = False
         self.off_time = None
-        self.cooldownPeriod = 300
+        self.cooldownPeriod = 900
+        self.warmupPeriod = 900
 
     async def powerLightOn(self):
         """ Signals the Horiba device to power light on.
@@ -78,10 +80,11 @@ class WhiteLightSourceModel():
                 raise salobj.ExpectedError("Bulb is already off")
         else:
             # this executes when watts are inside the 800-1200 range
+            if not self.bulb_on:
+                raise salobj.ExpectedError("You must turn the light on before setting light power.")
             if not self.on_task.done():
                 await self.on_task
                 self.component.setLightPower(watts)
-                self.bulb_on = True
             else:
                 self.component.setLightPower(watts)
                 self.bulb_on = True

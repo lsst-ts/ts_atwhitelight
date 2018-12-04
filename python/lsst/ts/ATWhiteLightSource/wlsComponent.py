@@ -30,6 +30,25 @@ class WhiteLightSourceComponent():
         targetVoltage = self._wattsToVolts(watts)
         self._writeVoltage(targetVoltage)
 
+    def checkErrors(self):
+        """ checks 4 analog inputs to see if any of them have 
+            voltages in excess of 3.0. If so, that's an error!
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        errors: List of booleans
+        """
+
+        errors = [False, False, False, False]
+        for i in range(4):
+            errors[i] = self._readVoltage(i) > 3.0
+        
+        return errors
+
     def _wattsToVolts(self, watts):
         """ calculates what voltage to send (in the range of 1.961v to 5.0v)
             in order to achieve the desired watt output (in the range of
@@ -47,6 +66,22 @@ class WhiteLightSourceComponent():
         """
 
         return -4.176993316101 + watts / 130.762
+
+    def _readVoltage(self, channel):
+        """ reads the voltage off of ADAM-6024's inputs for a given channel.
+
+        Parameters
+        ----------
+        channel : int
+            analog input channel to read, in range of 0-5
+
+        Returns
+        -------
+        volts : float
+            the voltage on this particular ADAM input channel
+        """
+        readout = self.client.read_input_registers(channel,1, unit=1).registers[0]
+        return self._countsToVolts(readout)
 
     def _writeVoltage(self, volts):
         """ writes the requested voltage to the ADAM-6024 output register AO0
