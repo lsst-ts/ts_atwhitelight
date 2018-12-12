@@ -1,5 +1,6 @@
 __all__ = ["WhiteLightSourceComponentSimulator"]
 
+import time
 
 class WhiteLightSourceComponentSimulator():
     """ A fake version of the White Light Source component that doesn't
@@ -8,10 +9,53 @@ class WhiteLightSourceComponentSimulator():
     """
 
     def __init__(self, ip='140.252.33.160', port=502):
-        self.bulbHours = None  # Read this from EFD when we initialize
-        self.bulbWattHours = None  # This too
-        self.bulbCount = None  # how many bulbs have there been in total?
+        self.bulbHours = 0  # Read this from EFD when we initialize
+        self.bulbWattHours = 0  # This too
+        self.bulbHoursLastUpdate = time.time()
         self.bulbState = 0
+
+        self.greenStatusLED = True    # operating/standby indicator
+        self.blueStatusLED = False    # cooldown indicator
+        self.redStatusLED = False     # error indicator
+        self.errorLED = False         # flashes to signal error type
+
+    def setError(self, id):
+        """ Simulates an error of the given type. When the hardware
+            enters an error state, the status LED will be red, and
+            the error LED will flash a number fo times at 0.5 second
+            intervals to indicate one of the following errors,
+            followed by a 1.5 second gap, then repeating.
+
+            1 EMERGENCY KILL SWITCH TRIGGERED
+            2 TEMPERATURE SWITCH FAULT CHASSIS OVERHEATING
+            3 ACCESS DOOR SWITCH NOT SET
+            4 LBM_HOT FROM BALLAST INDICATES BALLAST OVERHEATING
+            5 USB CABLE REMOVED - DISCONNECTED FROM HOST COMPUTER
+            6 AIRFLOW SENSOR DETECTING INADEQUATE COOLING DUE TO LACK
+              OF AIRFLOW
+            7 BULB DIDN'T EXTINGUISH AFTER INSTRUCTED TO DO SO. ENGAGE
+              EMERGENCY KILL SWITCH, WAIT 5 MINUTES, THEN TURN OFF POWER.
+              RESTART SOFTWARE, WAIT 1 MINUTE. TURN ON POWER
+            8 AIRFLOW CIRCUITRY MALFUNCTION
+
+            Parameters
+            ----------
+            id : int 
+                Should be in the range of 1-8.
+
+            Returns
+            -------
+            None
+        """
+        while self.redStatusLED:
+            i = 0
+            while i < id:
+                self.errorLED = True
+                time.sleep(0.5)
+                self.errorLED = False
+                time.sleep(0.5)
+                i += 1
+            time.sleep(1.5)
 
     def setLightPower(self, watts):
         """ Sets the brightness (in watts) on the white light source.
@@ -30,6 +74,21 @@ class WhiteLightSourceComponentSimulator():
         """
         self.bulbState = watts
         self._printBulbState()
+
+    def checkStatus(self):
+        """ checks 4 analog inputs to see if any of them have
+            voltages in excess of 3.0. If so, that's an error!
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        errors: List of booleans
+        """
+
+        return [self.bulbState, self.greenStatusLED, self.blueStatusLED, self.redStatusLED, self.errorLED]
 
     def _printBulbState(self):
         print("Simulated WLS bulb set to " + str(self.bulbState) + " watts.")

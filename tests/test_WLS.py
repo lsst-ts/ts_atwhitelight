@@ -11,11 +11,14 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         self.csc = WhiteLightSourceCSC()
         self.csc.summary_state = salobj.State.ENABLED
 
-        # set short cooldown and warmup periods so the tests don't take 15m to run
+        # set short cooldown and warmup periods so the tests don't take hours
         self.csc.model.cooldownPeriod = 3
         self.csc.model.warmupPeriod = 3
 
         self.remote = salobj.Remote(SALPY_ATWhiteLight, index=None)
+
+    def testRemotePowerOn(self):
+        pass
 
     def testPowerOn(self):
         """

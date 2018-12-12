@@ -58,6 +58,18 @@ class WhiteLightSourceModel():
 
     async def setLightPower(self, watts):
         """ Sets the brightness (in watts) on the white light source.
+            There are lots of constraints.
+            1 When we turn the bulb on (>800w) we aren't allowed to turn
+              it off for 15m because the Hg inside needs to fully evaporate
+              But we can overrride.
+            2 When we turn the bulb off, we need to wait 15m for the Hg to
+              recondense before we can turn it on again.
+            3 When we turn on, we go to maximum brightness for 2 seconds and
+              then drop back down.
+            4 1200w is the maximum brightness, and requesting higher will
+              produce an error.
+            5 800w is the minimum, and requesting lower is the same as
+              requesting to power off.
 
             Parameters
             ----------
@@ -95,3 +107,17 @@ class WhiteLightSourceModel():
             else:
                 self.component.setLightPower(watts)
                 self.bulb_on = True
+
+    async def emergencyPowerLightOff(self):
+        """Signals the device to power off immediately, ignoring the 15m 
+           warmup period. The manufacturer warns that this can significantly
+           reduce the life of the bulb.
+        """
+        if self.bulb_on:
+                self.cooldown_task = asyncio.ensure_future(asyncio.sleep(self.cooldownPeriod))
+                self.component.setLightPower(0)
+                self.bulb_on = False
+                self.off_time = time.time()
+            else:
+                raise salobj.ExpectedError("Bulb is already off")
+

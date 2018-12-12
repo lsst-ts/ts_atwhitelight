@@ -1,6 +1,7 @@
 __all__ = ["WhiteLightSourceComponent"]
 
 from pymodbus.client.sync import ModbusTcpClient as ModbusClient
+import time
 
 
 class WhiteLightSourceComponent():
@@ -9,9 +10,15 @@ class WhiteLightSourceComponent():
 
     def __init__(self, ip='140.252.33.160', port=502):
         self.client = ModbusClient(ip, port)
-        self.bulbHours = None  # Read this from EFD when we initialize
-        self.bulbWattHours = None  # This too
-        self.bulbCount = None  # how many bulbs have there been in total?
+        self.bulbHours = 0  # Read this from EFD when we initialize
+        self.bulbWattHours = 0  # This too
+        self.bulbCount = 0  # how many bulbs have there been in total?
+        self.bulbState = 0
+
+        self.greenStatusLED = False   # operating/standby indicator
+        self.blueStatusLED = False    # cooldown indicator
+        self.redStatusLED = False     # error indicator
+        self.errorLED = False         # flashes to signal error type
 
     def setLightPower(self, watts):
         """ Sets the brightness (in watts) on the white light source.
@@ -29,8 +36,9 @@ class WhiteLightSourceComponent():
 
         targetVoltage = self._wattsToVolts(watts)
         self._writeVoltage(targetVoltage)
+        self.bulbState = watts
 
-    def checkErrors(self):
+    def checkStatus(self):
         """ checks 4 analog inputs to see if any of them have
             voltages in excess of 3.0. If so, that's an error!
 
