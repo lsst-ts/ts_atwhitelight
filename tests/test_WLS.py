@@ -149,6 +149,21 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
             self.assertEqual(self.csc.model.component.bulbState, 800)
         asyncio.get_event_loop().run_until_complete(doit())
 
+    def testEmergencyPowerLightOff(self):
+        """
+        Tests that emergencyPowerLightOff works during the warmup
+        period.
+        """
+        async def doit():
+            self.assertEqual(self.csc.model.component.bulbState, 0)
+            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            await task
+            self.assertEqual(self.csc.model.component.bulbState, 800)
+            task = asyncio.ensure_future(self.csc.do_emergencyPowerLightOff())
+            await task
+            self.assertEqual(self.csc.model.component.bulbState, 0)
+        asyncio.get_event_loop().run_until_complete(doit())
+
     def testCantPowerOffWhileOff(self):
         """
         Tests that we get an error when we try to turn off the bulb

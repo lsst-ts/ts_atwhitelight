@@ -109,15 +109,14 @@ class WhiteLightSourceModel():
                 self.bulb_on = True
 
     async def emergencyPowerLightOff(self):
-        """Signals the device to power off immediately, ignoring the 15m 
+        """Signals the device to power off immediately, ignoring the 15m
            warmup period. The manufacturer warns that this can significantly
            reduce the life of the bulb.
         """
         if self.bulb_on:
-                self.cooldown_task = asyncio.ensure_future(asyncio.sleep(self.cooldownPeriod))
-                self.component.setLightPower(0)
-                self.bulb_on = False
-                self.off_time = time.time()
-            else:
-                raise salobj.ExpectedError("Bulb is already off")
-
+            self.cooldown_task = asyncio.ensure_future(asyncio.sleep(self.cooldownPeriod))
+            self.component.setLightPower(0)
+            self.bulb_on = False
+            self.off_time = time.time()
+        else:
+            raise salobj.ExpectedError("Bulb is already off")

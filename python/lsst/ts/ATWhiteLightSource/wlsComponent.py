@@ -1,7 +1,6 @@
 __all__ = ["WhiteLightSourceComponent"]
 
 from pymodbus.client.sync import ModbusTcpClient as ModbusClient
-import time
 
 
 class WhiteLightSourceComponent():

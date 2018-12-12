@@ -2,6 +2,7 @@ __all__ = ["WhiteLightSourceComponentSimulator"]
 
 import time
 
+
 class WhiteLightSourceComponentSimulator():
     """ A fake version of the White Light Source component that doesn't
         communicate with hardware at all but prints the wattage
@@ -40,7 +41,7 @@ class WhiteLightSourceComponentSimulator():
 
             Parameters
             ----------
-            id : int 
+            id : int
                 Should be in the range of 1-8.
 
             Returns
