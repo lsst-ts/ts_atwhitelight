@@ -43,8 +43,8 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
 
     async def eventListenerLoop(self):
         """ Periodically checks with the component to see if the wattage
-            or the hardware's "status light" has changed. If so, we publish
-            an event
+            and/or the hardware's "status light" has changed. If so, we 
+            publish an event
         """
         previousState = self.model.component.checkStatus()
         while True:
@@ -75,7 +75,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
 
         while True:
             # calculate uptime and wattage since the last iteration of this loop
-            lastIntervalUptime = time.time() - self.model.component.bulbHoursLastUpdate
+            lastIntervalUptime = time.time()/3600 - self.model.component.bulbHoursLastUpdate
             lastIntervalWattHours = lastIntervalUptime * self.model.component.bulbState
 
             # if the bulb is on, update the tracking variables in the component
@@ -83,8 +83,8 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
                 self.model.component.bulbHours += lastIntervalUptime
                 self.model.component.bulbWattHours += lastIntervalWattHours
 
-            # update time of last update
-            self.model.component.bulbHoursLastUpdate = time.time()
+            # set time of last update to current time
+            self.model.component.bulbHoursLastUpdate = time.time()/3600
 
             # update topics with latest data from component
             self.bulb_uptime_topic.bulbHours = float(self.model.component.bulbHours)

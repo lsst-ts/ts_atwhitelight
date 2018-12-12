@@ -12,7 +12,7 @@ class WhiteLightSourceComponentSimulator():
     def __init__(self, ip='140.252.33.160', port=502):
         self.bulbHours = 0  # Read this from EFD when we initialize
         self.bulbWattHours = 0  # This too
-        self.bulbHoursLastUpdate = time.time()
+        self.bulbHoursLastUpdate = time.time()/3600
         self.bulbState = 0
 
         self.greenStatusLED = True    # operating/standby indicator
