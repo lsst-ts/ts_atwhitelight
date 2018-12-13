@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+import time
 
 import SALPY_ATWhiteLight
 from lsst.ts import salobj
@@ -17,7 +18,7 @@ class WhiteLightSourceRemoteTests(unittest.TestCase):
 
         self.remote = salobj.Remote(SALPY_ATWhiteLight, index=None)
 
-    def testPowerOn(self):
+    def testPowerOnOff(self):
         """
         Tests we can power on through the Remote system.
         """
@@ -27,9 +28,10 @@ class WhiteLightSourceRemoteTests(unittest.TestCase):
             powerOn_topic = self.remote.cmd_powerLightOn.DataType()
             powerOn_topic.power = True
             powerOn_ack = await self.remote.cmd_powerLightOn.start(powerOn_topic, timeout)
-
             powerOff_topic = self.remote.cmd_powerLightOff.DataType()
             powerOff_topic.power = False
+            time.sleep(3)
+            print("sleepin'")
             powerOff_ack = await self.remote.cmd_powerLightOff.start(powerOff_topic, timeout)
         asyncio.get_event_loop().run_until_complete(doit())
 

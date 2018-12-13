@@ -57,6 +57,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
                 self.status_event_topic.error = currentState[4]
 
                 self.evt_whiteLightStatus.put(self.status_event_topic)
+                previousState = currentState
             await asyncio.sleep(self.event_listener_interval)
 
     async def sendTelemetry(self):

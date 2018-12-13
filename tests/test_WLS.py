@@ -7,7 +7,6 @@ from lsst.ts.ATWhiteLightSource.wlsCSC import WhiteLightSourceCSC
 from collections import namedtuple
 
 
-
 class WhiteLightSourceCSCTests(unittest.TestCase):
     def setUp(self):
         self.csc = WhiteLightSourceCSC()
@@ -23,13 +22,11 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         """wraps the wattage number up in something that looks like id_data
            so these tests can easily call the csc do_setLightPower() method
         """
-        dataclass = namedtuple('data',['setLightPower'])
+        dataclass = namedtuple('data', ['setLightPower'])
         id_dataclass = namedtuple('id_data', 'data')
         data = dataclass(watts)
         id_data = id_dataclass(data)
         return id_data
-
-
 
     def testRemotePowerOn(self):
         pass
