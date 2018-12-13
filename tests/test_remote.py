@@ -6,7 +6,7 @@ from lsst.ts import salobj
 from lsst.ts.ATWhiteLightSource.wlsCSC import WhiteLightSourceCSC
 
 
-class WhiteLightSourceCSCTests(unittest.TestCase):
+class WhiteLightSourceRemoteTests(unittest.TestCase):
     def setUp(self):
         self.csc = WhiteLightSourceCSC()
         self.csc.summary_state = salobj.State.ENABLED

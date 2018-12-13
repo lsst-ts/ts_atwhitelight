@@ -24,21 +24,21 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         asyncio.ensure_future(self.sendTelemetry())
         asyncio.ensure_future(self.eventListenerLoop())
 
-    async def do_powerLightOn(self):
+    async def do_powerLightOn(self, id_data):
         self.assert_enabled("powerLightOn")
         await self.model.powerLightOn()
 
-    async def do_powerLightOff(self):
+    async def do_powerLightOff(self, id_data):
         await self.model.setLightPower(0)
 
-    async def do_setLightPower(self, watts):
+    async def do_setLightPower(self, id_data):
         self.assert_enabled("setLightPower")
-        await self.model.setLightPower(watts)
+        await self.model.setLightPower(id_data.data.setLightPower)
 
-    async def do_emergencyPowerLightOff(self):
+    async def do_emergencyPowerLightOff(self, id_data):
         await self.model.emergencyPowerLightOff()
 
-    async def do_setLogLevel(self):
+    async def do_setLogLevel(self, id_data):
         pass
 
     async def eventListenerLoop(self):

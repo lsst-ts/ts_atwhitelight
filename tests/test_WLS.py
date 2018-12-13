@@ -4,6 +4,8 @@ import unittest
 import SALPY_ATWhiteLight
 from lsst.ts import salobj
 from lsst.ts.ATWhiteLightSource.wlsCSC import WhiteLightSourceCSC
+from collections import namedtuple
+
 
 
 class WhiteLightSourceCSCTests(unittest.TestCase):
@@ -17,6 +19,18 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
 
         self.remote = salobj.Remote(SALPY_ATWhiteLight, index=None)
 
+    def slp(self, watts):
+        """wraps the wattage number up in something that looks like id_data
+           so these tests can easily call the csc do_setLightPower() method
+        """
+        dataclass = namedtuple('data',['setLightPower'])
+        id_dataclass = namedtuple('id_data', 'data')
+        data = dataclass(watts)
+        id_data = id_dataclass(data)
+        return id_data
+
+
+
     def testRemotePowerOn(self):
         pass
 
@@ -26,7 +40,7 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         """
         async def doit():
             self.assertEqual(self.csc.model.component.bulbState, 0)
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await asyncio.sleep(0.3)
             self.assertEqual(self.csc.model.component.bulbState, 1200)
             await task
@@ -39,11 +53,11 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         """
         async def doit():
             self.assertEqual(self.csc.model.component.bulbState, 0)
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
             self.assertEqual(self.csc.model.component.bulbState, 800)
             await self.csc.model.warmup_task
-            task = asyncio.ensure_future(self.csc.do_powerLightOff())
+            task = asyncio.ensure_future(self.csc.do_powerLightOff(None))
             await task
             self.assertEqual(self.csc.model.component.bulbState, 0)
         asyncio.get_event_loop().run_until_complete(doit())
@@ -53,12 +67,12 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         Tests bulb wattage setting.
         """
         async def doit():
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
             self.assertEqual(self.csc.model.component.bulbState, 800)
 
             # set to 950 watts
-            task = asyncio.ensure_future(self.csc.do_setLightPower(950))
+            task = asyncio.ensure_future(self.csc.do_setLightPower(self.slp(950)))
             await task
             self.assertEqual(self.csc.model.component.bulbState, 950)
 
@@ -69,13 +83,13 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         Tests that we power off when we request a wattage <800.
         """
         async def doit():
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
             self.assertEqual(self.csc.model.component.bulbState, 800)
 
             # any setting below 800 should result in 0 watts
             await self.csc.model.warmup_task
-            task = asyncio.ensure_future(self.csc.do_setLightPower(799))
+            task = asyncio.ensure_future(self.csc.do_setLightPower(self.slp(799)))
             await task
             self.assertEqual(self.csc.model.component.bulbState, 0)
         asyncio.get_event_loop().run_until_complete(doit())
@@ -85,9 +99,9 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         Make sure we get an exception when we set the wattage too high.
         """
         async def doit():
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
-            task = asyncio.ensure_future(self.csc.do_setLightPower(1201))
+            task = asyncio.ensure_future(self.csc.do_setLightPower(self.slp(1201)))
             with self.assertRaises(salobj.ExpectedError):
                 await task
         asyncio.get_event_loop().run_until_complete(doit())
@@ -97,13 +111,13 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         Tests that when we power off, we're not allowed to setLightPower()
         """
         async def doit():
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
             self.assertEqual(self.csc.model.component.bulbState, 800)
             await self.csc.model.warmup_task
-            offtask = asyncio.ensure_future(self.csc.do_powerLightOff())
+            offtask = asyncio.ensure_future(self.csc.do_powerLightOff(None))
             await asyncio.sleep(0.5)
-            ontask = asyncio.ensure_future(self.csc.do_setLightPower(999))
+            ontask = asyncio.ensure_future(self.csc.do_setLightPower(self.slp(999)))
             with self.assertRaises(salobj.ExpectedError):
                 await ontask
             await offtask
@@ -116,18 +130,18 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         it's 3 seconds.
         """
         async def doit():
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
             self.assertEqual(self.csc.model.component.bulbState, 800)
             await self.csc.model.warmup_task
-            offtask = asyncio.ensure_future(self.csc.do_powerLightOff())
+            offtask = asyncio.ensure_future(self.csc.do_powerLightOff(None))
             await asyncio.sleep(0.5)
-            ontask = asyncio.ensure_future(self.csc.do_powerLightOn())
+            ontask = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             with self.assertRaises(salobj.ExpectedError):
                 await ontask
             await offtask
             await self.csc.model.cooldown_task
-            ontask2 = asyncio.ensure_future(self.csc.do_powerLightOn())
+            ontask2 = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await ontask2
             self.assertEqual(self.csc.model.component.bulbState, 800)
         asyncio.get_event_loop().run_until_complete(doit())
@@ -140,10 +154,10 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         """
         async def doit():
             self.assertEqual(self.csc.model.component.bulbState, 0)
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
             self.assertEqual(self.csc.model.component.bulbState, 800)
-            task = asyncio.ensure_future(self.csc.do_powerLightOff())
+            task = asyncio.ensure_future(self.csc.do_powerLightOff(None))
             with self.assertRaises(salobj.ExpectedError):
                 await task
             self.assertEqual(self.csc.model.component.bulbState, 800)
@@ -156,10 +170,10 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         """
         async def doit():
             self.assertEqual(self.csc.model.component.bulbState, 0)
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
             self.assertEqual(self.csc.model.component.bulbState, 800)
-            task = asyncio.ensure_future(self.csc.do_emergencyPowerLightOff())
+            task = asyncio.ensure_future(self.csc.do_emergencyPowerLightOff(None))
             await task
             self.assertEqual(self.csc.model.component.bulbState, 0)
         asyncio.get_event_loop().run_until_complete(doit())
@@ -170,12 +184,12 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         when it is already off.
         """
         async def doit():
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
             await self.csc.model.warmup_task
-            task = asyncio.ensure_future(self.csc.do_powerLightOff())
+            task = asyncio.ensure_future(self.csc.do_powerLightOff(None))
             await task
-            task = asyncio.ensure_future(self.csc.do_powerLightOff())
+            task = asyncio.ensure_future(self.csc.do_powerLightOff(None))
             with self.assertRaises(salobj.ExpectedError):
                 await task
 
@@ -187,10 +201,10 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         when it is already on.
         """
         async def doit():
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
             await self.csc.model.warmup_task
-            task = asyncio.ensure_future(self.csc.do_powerLightOn())
+            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             with self.assertRaises(salobj.ExpectedError):
                 await task
 
@@ -203,10 +217,10 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         requested wattage.
         """
         async def doit():
-            ontask = asyncio.ensure_future(self.csc.do_powerLightOn())
+            ontask = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await asyncio.sleep(0.3)
             self.assertEqual(self.csc.model.component.bulbState, 1200)
-            changetask = asyncio.ensure_future(self.csc.do_setLightPower(1105))
+            changetask = asyncio.ensure_future(self.csc.do_setLightPower(self.slp(1105)))
             await asyncio.sleep(0.3)
             self.assertEqual(self.csc.model.component.bulbState, 1200)
             await ontask
