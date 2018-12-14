@@ -3,6 +3,7 @@ import unittest
 
 import SALPY_ATWhiteLight
 from lsst.ts import salobj
+from lsst.ts.salobj import test_utils
 from lsst.ts.ATWhiteLightSource.wlsCSC import WhiteLightSourceCSC
 from collections import namedtuple
 
@@ -35,6 +36,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         """
         Tests bulb wattage ramps to 1200 for 2 sec, then drops to 800.
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             self.assertEqual(self.csc.model.component.bulbState, 0)
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
@@ -48,6 +51,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         """
         Tests the PowerLightOff command, which sets watts to 0.
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             self.assertEqual(self.csc.model.component.bulbState, 0)
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
@@ -63,6 +68,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         """
         Tests bulb wattage setting.
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
@@ -79,6 +86,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         """
         Tests that we power off when we request a wattage <800.
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
@@ -95,6 +104,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         """
         Make sure we get an exception when we set the wattage too high.
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
@@ -107,6 +118,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         """
         Tests that when we power off, we're not allowed to setLightPower()
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
@@ -126,6 +139,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         the cooldown period. Normally this is 5 minutes, but in this test
         it's 3 seconds.
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
@@ -149,6 +164,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         the warmup period. Normally this is 15 minutes, but in this test
         it's 3 seconds.
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             self.assertEqual(self.csc.model.component.bulbState, 0)
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
@@ -165,6 +182,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         Tests that emergencyPowerLightOff works during the warmup
         period.
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             self.assertEqual(self.csc.model.component.bulbState, 0)
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
@@ -180,6 +199,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         Tests that we get an error when we try to turn off the bulb
         when it is already off.
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
@@ -197,6 +218,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         Tests that we get an error when we try to turn on the bulb
         when it is already on.
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
@@ -213,6 +236,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         the ramp-up finishes normally and then we jump to the
         requested wattage.
         """
+        test_utils.set_random_lsst_dds_domain()
+
         async def doit():
             ontask = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await asyncio.sleep(0.3)
