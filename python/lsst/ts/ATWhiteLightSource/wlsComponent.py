@@ -1,6 +1,7 @@
 __all__ = ["WhiteLightSourceComponent"]
 
 from pymodbus.client.sync import ModbusTcpClient as ModbusClient
+import time
 
 
 class WhiteLightSourceComponent():
@@ -12,6 +13,7 @@ class WhiteLightSourceComponent():
         self.bulbHours = 0  # Read this from EFD when we initialize
         self.bulbWattHours = 0  # This too
         self.bulbCount = 0  # how many bulbs have there been in total?
+        self.bulbHoursLastUpdate = time.time()/3600
         self.bulbState = 0
 
         self.greenStatusLED = False   # operating/standby indicator

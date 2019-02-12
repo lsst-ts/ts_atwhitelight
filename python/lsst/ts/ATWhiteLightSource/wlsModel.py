@@ -3,7 +3,7 @@ __all__ = ["WhiteLightSourceModel"]
 import time
 import asyncio
 
-# from .wlsComponent import WhiteLightSourceComponent
+from .wlsComponent import WhiteLightSourceComponent
 from .wlsSimComponent import WhiteLightSourceComponentSimulator
 from lsst.ts import salobj
 
@@ -11,8 +11,8 @@ from lsst.ts import salobj
 class WhiteLightSourceModel():
 
     def __init__(self):
-        # self.component = WhiteLightSourceComponent()
-        self.component = WhiteLightSourceComponentSimulator()
+        self.component = WhiteLightSourceComponent()
+        #self.component = WhiteLightSourceComponentSimulator()
         self.startupWattage = 1200
         self.defaultWattage = 800
         self.startupTime = 2
@@ -90,6 +90,7 @@ class WhiteLightSourceModel():
                 elapsed = time.time() - self.on_time
                 remaining = self.warmupPeriod - elapsed
                 raise salobj.ExpectedError(description + str(remaining) + " seconds.")
+                
             if self.bulb_on:
                 self.cooldown_task = asyncio.ensure_future(asyncio.sleep(self.cooldownPeriod))
                 self.component.setLightPower(0)
