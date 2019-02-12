@@ -51,10 +51,18 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             currentState = self.model.component.checkStatus()
             if currentState != previousState:
                 # something has changed, so publish a new status event
-                self.status_event_topic.wattageChange = float(currentState[0])
-                self.status_event_topic.coolingDown = currentState[2]
-                self.status_event_topic.acceptingCommands = currentState[1]
-                self.status_event_topic.error = currentState[4]
+                #self.status_event_topic.wattageChange = float(currentState[0]) #old way
+                #self.evt_statusEvent.data.wattageChange =float(currentState[0]) #new way
+                #self.status_event_topic.coolingDown = currentState[2]
+                #self.status_event_topic.acceptingCommands = currentState[1]
+                #self.status_event_topic.error = currentState[4]
+
+                self.evt_whiteLightStatus.set_put(
+                    wattageChange = float(currentState[0]),
+                    coolingDown = currentState[2],
+                    acceptingCommands = currentState[1],
+                    error = currentState[4],
+                )
 
                 self.evt_whiteLightStatus.put(self.status_event_topic)
                 previousState = currentState
