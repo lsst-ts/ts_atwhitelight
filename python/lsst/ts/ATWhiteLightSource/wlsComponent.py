@@ -1,6 +1,7 @@
 __all__ = ["WhiteLightSourceComponent"]
 
 from pymodbus.client.sync import ModbusTcpClient as ModbusClient
+from lsst.ts import salobj
 import time
 
 
@@ -74,7 +75,9 @@ class WhiteLightSourceComponent():
             the Kiloarc's input voltage corresponding to the desired output wattage
         """
 
-        return -4.176993316101 + watts / 130.762
+        output = -4.176993316101 + watts / 130.762
+        if output < 0: output = 0 # voltage should have a floor of 0. 
+        return output
 
     def _readVoltage(self, channel):
         """ reads the voltage off of ADAM-6024's inputs for a given channel.

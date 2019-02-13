@@ -24,6 +24,15 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         asyncio.ensure_future(self.sendTelemetry())
         asyncio.ensure_future(self.eventListenerLoop())
 
+    async def implement_simulation_mode(self, sim_mode):
+        """ Swaps between real and simulated component upon request.
+            Should not be called while CSC is running
+        """
+        print("sim mode " + str(sim_mode))
+        if sim_mode == 0: 
+            self.model.component = self.model.realComponent # TODO: change this to realComponent
+        else: self.model.component = self.model.simComponent
+
     async def do_powerLightOn(self, id_data):
         self.assert_enabled("powerLightOn")
         await self.model.powerLightOn()
@@ -44,24 +53,20 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
     async def eventListenerLoop(self):
         """ Periodically checks with the component to see if the wattage
             and/or the hardware's "status light" has changed. If so, we 
-            publish an event
+            publish an event.
         """
         previousState = self.model.component.checkStatus()
         while True:
             currentState = self.model.component.checkStatus()
             if currentState != previousState:
-                # something has changed, so publish a new status event
-                #self.status_event_topic.wattageChange = float(currentState[0]) #old way
-                #self.evt_statusEvent.data.wattageChange =float(currentState[0]) #new way
-                #self.status_event_topic.coolingDown = currentState[2]
-                #self.status_event_topic.acceptingCommands = currentState[1]
-                #self.status_event_topic.error = currentState[4]
+                print("Voltage change detected! \nError status: " + str(currentState))
+                
 
                 self.evt_whiteLightStatus.set_put(
                     wattageChange = float(currentState[0]),
                     coolingDown = currentState[2],
                     acceptingCommands = currentState[1],
-                    error = currentState[4],
+                    error = currentState[3],
                 )
 
                 self.evt_whiteLightStatus.put(self.status_event_topic)
@@ -81,8 +86,10 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             -------
             None
         """
-
+        i = 0 
         while True:
+            i += 1
+            #print("loopin' " + str(i))
             # calculate uptime and wattage since the last iteration of this loop
             lastIntervalUptime = time.time()/3600 - self.model.component.bulbHoursLastUpdate
             lastIntervalWattHours = lastIntervalUptime * self.model.component.bulbState

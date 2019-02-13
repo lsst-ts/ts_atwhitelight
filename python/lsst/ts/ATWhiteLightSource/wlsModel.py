@@ -11,8 +11,9 @@ from lsst.ts import salobj
 class WhiteLightSourceModel():
 
     def __init__(self):
-        #self.component = WhiteLightSourceComponent()
-        self.component = WhiteLightSourceComponentSimulator()
+        self.realComponent = WhiteLightSourceComponent()
+        self.simComponent = WhiteLightSourceComponentSimulator()
+        self.component = self.simComponent
         self.startupWattage = 1200
         self.defaultWattage = 800
         self.startupTime = 2
