@@ -15,12 +15,12 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         # topic objects
         self.bulb_uptime_topic = self.tel_bulbHours.DataType()
         self.bulb_uptime_watthours_topic = self.tel_bulbWattHours.DataType()
-        self.status_event_topic = self.evt_whiteLightStatus.DataType()
+        #self.status_event_topic = self.evt_whiteLightStatus.DataType()
 
         self.telemetry_publish_interval = 5
         self.event_listener_interval = 1
 
-        # start the event and telemetry loopd
+        # start the event and telemetry loops
         asyncio.ensure_future(self.sendTelemetry())
         asyncio.ensure_future(self.eventListenerLoop())
 
@@ -53,7 +53,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
     async def eventListenerLoop(self):
         """ Periodically checks with the component to see if the wattage
             and/or the hardware's "status light" has changed. If so, we 
-            publish an event.
+            publish an event to SAL.
         """
         previousState = self.model.component.checkStatus()
         while True:
@@ -63,13 +63,12 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
                 
 
                 self.evt_whiteLightStatus.set_put(
-                    wattageChange = float(currentState[0]),
-                    coolingDown = currentState[2],
-                    acceptingCommands = currentState[1],
-                    error = currentState[3],
+                    wattageChange = float(currentState.wattage),
+                    coolingDown = currentState.blueLED,
+                    acceptingCommands = currentState.greenLED,
+                    error = currentState.redLED,
                 )
 
-                self.evt_whiteLightStatus.put(self.status_event_topic)
                 previousState = currentState
             await asyncio.sleep(self.event_listener_interval)
 
@@ -86,10 +85,8 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             -------
             None
         """
-        i = 0 
         while True:
-            i += 1
-            #print("loopin' " + str(i))
+
             # calculate uptime and wattage since the last iteration of this loop
             lastIntervalUptime = time.time()/3600 - self.model.component.bulbHoursLastUpdate
             lastIntervalWattHours = lastIntervalUptime * self.model.component.bulbState

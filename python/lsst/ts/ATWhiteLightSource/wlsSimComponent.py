@@ -1,6 +1,7 @@
 __all__ = ["WhiteLightSourceComponentSimulator"]
 
 import time
+from collections import namedtuple
 
 
 class WhiteLightSourceComponentSimulator():
@@ -13,12 +14,9 @@ class WhiteLightSourceComponentSimulator():
         self.bulbHours = 0  # Read this from EFD when we initialize
         self.bulbWattHours = 0  # This too
         self.bulbHoursLastUpdate = time.time()/3600
-        self.bulbState = 0
+        self.bulbState = 0 #current wattage
 
-        self.greenStatusLED = True    # operating/standby indicator
-        self.blueStatusLED = False    # cooldown indicator
-        self.redStatusLED = False     # error indicator
-        self.errorLED = False         # flashes to signal error type
+
 
     def setError(self, id):
         """ Simulates an error of the given type. When the hardware
@@ -89,7 +87,8 @@ class WhiteLightSourceComponentSimulator():
         errors: List of booleans
         """
 
-        return [self.bulbState, self.greenStatusLED, self.blueStatusLED, self.redStatusLED, self.errorLED]
+        KiloArcStatus = namedtuple('KiloArcStatus', ['wattage','greenLED','blueLED','redLED','errorLED'])
+        return KiloArcStatus(self.bulbState, self.greenStatusLED, self.blueStatusLED, self.redStatusLED, self.errorLED)
 
     def _printBulbState(self):
         print("Simulated WLS bulb set to " + str(self.bulbState) + " watts.")

@@ -2,6 +2,7 @@ __all__ = ["WhiteLightSourceComponent"]
 
 from pymodbus.client.sync import ModbusTcpClient as ModbusClient
 from lsst.ts import salobj
+from collections import namedtuple
 import time
 
 
@@ -16,11 +17,6 @@ class WhiteLightSourceComponent():
         self.bulbCount = 0  # how many bulbs have there been in total?
         self.bulbHoursLastUpdate = time.time()/3600
         self.bulbState = 0
-
-        self.greenStatusLED = False   # operating/standby indicator
-        self.blueStatusLED = False    # cooldown indicator
-        self.redStatusLED = False     # error indicator
-        self.errorLED = False         # flashes to signal error type
 
     def setLightPower(self, watts):
         """ Sets the brightness (in watts) on the white light source.
@@ -42,7 +38,11 @@ class WhiteLightSourceComponent():
 
     def checkStatus(self):
         """ checks 4 analog inputs to see if any of them have
-            voltages in excess of 3.0. If so, that's an error!
+            voltages in excess of 3.0. If so, that LED is lit!
+            errorLED communicates error ID by flashing, so if we 
+            want to do anything with that, we will need to 
+            sample quickly enough to count flashes. Probably not
+            going to do this. 
 
         Parameters
         ----------
@@ -50,14 +50,14 @@ class WhiteLightSourceComponent():
 
         Returns
         -------
-        errors: List of booleans
+        status: NamedTuple containing the current wattage, then
+                booleans representing the status LEDs. 
         """
+        KiloArcStatus = namedtuple('KiloArcStatus', ['wattage','greenLED','blueLED','redLED','errorLED'])
+        status = KiloArcStatus(self.bulbState, self._readVoltage(0) > 3.0, self._readVoltage(1) > 3.0,\
+            self._readVoltage(2) > 3.0, self._readVoltage(3) > 3.0)
 
-        errors = [False, False, False, False]
-        for i in range(4):
-            errors[i] = self._readVoltage(i) > 3.0
-
-        return errors
+        return status
 
     def _wattsToVolts(self, watts):
         """ calculates what voltage to send (in the range of 1.961v to 5.0v)
@@ -76,7 +76,7 @@ class WhiteLightSourceComponent():
         """
 
         output = -4.176993316101 + watts / 130.762
-        if output < 0: output = 0 # voltage should have a floor of 0. 
+        if output < 0: output = 0 # voltage equation should have a floor of 0. 
         return output
 
     def _readVoltage(self, channel):
