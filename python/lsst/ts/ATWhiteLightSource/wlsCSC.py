@@ -1,7 +1,7 @@
 __all__ = ["WhiteLightSourceCSC"]
 
 from lsst.ts import salobj
-import SALPY_ATWhiteLight  # from salgenerator
+import SALPY_ATWhiteLight
 from .wlsModel import WhiteLightSourceModel
 import asyncio
 import time
@@ -12,25 +12,36 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         super().__init__(SALPY_ATWhiteLight)
         self.model = WhiteLightSourceModel()
 
-        # topic objects
-        self.bulb_uptime_topic = self.tel_bulbHours.DataType()
-        self.bulb_uptime_watthours_topic = self.tel_bulbWattHours.DataType()
-        #self.status_event_topic = self.evt_whiteLightStatus.DataType()
-
         self.telemetry_publish_interval = 5
-        self.event_listener_interval = 1
+        self.hardware_listener_interval = 1
 
-        # start the event and telemetry loops
-        asyncio.ensure_future(self.sendTelemetry())
-        asyncio.ensure_future(self.eventListenerLoop())
+        #start listening to the KiloArc hardware
+        
+
+    def begin_standby(self,id_data):
+        # don't let the user leave fault state if the KiloArc
+        # is reporting an error
+        if self.summary_state == salobj.State.FAULT:
+            if self.model.component.checkStatus().greenLED: #TODO change this to redLED
+                raise RuntimeError("Can't enter Standby state while KiloArc still reporting errors")
+
+
+    def begin_enable(self, id_data):
+        """ Upon entering ENABLE state, we need to start the telemetry loop. 
+        """
+        asyncio.ensure_future(self.telemetryLoop())
+        asyncio.ensure_future(self.hardwareListenerLoop())
+        
+
+    def begin_disable(self, id_data):
+        
 
     async def implement_simulation_mode(self, sim_mode):
         """ Swaps between real and simulated component upon request.
-            Should not be called while CSC is running
         """
         print("sim mode " + str(sim_mode))
         if sim_mode == 0: 
-            self.model.component = self.model.realComponent # TODO: change this to realComponent
+            self.model.component = self.model.realComponent
         else: self.model.component = self.model.simComponent
 
     async def do_powerLightOn(self, id_data):
@@ -47,32 +58,40 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
     async def do_emergencyPowerLightOff(self, id_data):
         await self.model.emergencyPowerLightOff()
 
-    async def do_setLogLevel(self, id_data):
-        pass
 
-    async def eventListenerLoop(self):
+    async def hardwareListenerLoop(self):
         """ Periodically checks with the component to see if the wattage
-            and/or the hardware's "status light" has changed. If so, we 
-            publish an event to SAL.
+            and/or the hardware's "status light" has changed. If so, we
+            publish an event to SAL. Unlike the LEDs, the wattage isn't
+            *actually* read from the hardware; we only know what wattage
+            the CSC is requesting.
         """
         previousState = self.model.component.checkStatus()
         while True:
             currentState = self.model.component.checkStatus()
             if currentState != previousState:
-                print("Voltage change detected! \nError status: " + str(currentState))
-                
-
+                print("Voltage change detected! \n" + str(currentState))
                 self.evt_whiteLightStatus.set_put(
                     wattageChange = float(currentState.wattage),
                     coolingDown = currentState.blueLED,
                     acceptingCommands = currentState.greenLED,
                     error = currentState.redLED,
                 )
+            previousState = currentState
 
-                previousState = currentState
-            await asyncio.sleep(self.event_listener_interval)
+            #if the KiloArc error light is on, put the CSC into FAULT state   
+            if currentState.greenLED:  #TODO change this to redLED
+                try:
+                    if self.model.bulb_on:
+                        await self.model.emergencyPowerLightOff()
+                except salobj.ExpectedError as e:
+                    print("Attempted emergency shutoff of light, but got error: "+ str(e))
+                self.summary_state = salobj.State.FAULT
 
-    async def sendTelemetry(self):
+            print("***"+str(self.summary_state))
+            await asyncio.sleep(self.hardware_listener_interval)
+
+    async def telemetryLoop(self):
         """ Publish WLS Telemetry. This includes:
                 bulb uptime (hours)
                 bulb uptime (watt-hours)
@@ -99,12 +118,8 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             # set time of last update to current time
             self.model.component.bulbHoursLastUpdate = time.time()/3600
 
-            # update topics with latest data from component
-            self.bulb_uptime_topic.bulbHours = float(self.model.component.bulbHours)
-            self.bulb_uptime_watthours_topic.bulbHours = float(self.model.component.bulbWattHours)
-
-            # publish the topics to sal
-            self.tel_bulbHours.put(self.bulb_uptime_topic)
-            self.tel_bulbWattHours.put(self.bulb_uptime_watthours_topic)
+            # publish telemetry
+            self.tel_bulbHours.set_put(bulbHours = float(self.model.component.bulbHours))
+            self.tel_bulbWattHours.set_put(bulbHours = float(self.model.component.bulbWattHours))
 
             await asyncio.sleep(self.telemetry_publish_interval)
