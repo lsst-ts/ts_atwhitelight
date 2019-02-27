@@ -13,27 +13,47 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         self.model = WhiteLightSourceModel()
 
         self.telemetry_publish_interval = 5
-        self.hardware_listener_interval = 1
+        self.hardware_listener_interval = 2
 
-        #start listening to the KiloArc hardware
+        #setup asyncio tasks for the loops
+        done_task = asyncio.Future()
+        done_task.set_result(None)
+        self.telemetryLoopTask = done_task
+        self.hardwareListenerTask = done_task
+
+        asyncio.ensure_future(self.stateloop())
+
+    
         
 
     def begin_standby(self,id_data):
         # don't let the user leave fault state if the KiloArc
         # is reporting an error
         if self.summary_state == salobj.State.FAULT:
-            if self.model.component.checkStatus().greenLED: #TODO change this to redLED
+            if self.model.component.checkStatus().redLED: #TODO change this to redLED
                 raise RuntimeError("Can't enter Standby state while KiloArc still reporting errors")
 
 
     def begin_enable(self, id_data):
-        """ Upon entering ENABLE state, we need to start the telemetry loop. 
+        """ Upon entering ENABLE state, we need to start 
+            the telemetry and hardware listener loops.
         """
-        asyncio.ensure_future(self.telemetryLoop())
-        asyncio.ensure_future(self.hardwareListenerLoop())
-        
+        print("begin_enable()")
+        self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
+        self.hardwareListenerTask = asyncio.ensure_future(self.hardwareListenerLoop())
 
+    def begin_start(self, id_data):
+        """ Executes during the STANDBY --> DISABLED state
+            transition. Confusing name, IMO. 
+        """
+        print("begin_start()")
+        self.telemetryLoopTask.cancel()
+        self.hardwareListenerTask.cancel()
+        
     def begin_disable(self, id_data):
+        print("begin_disable()")
+        self.telemetryLoopTask.cancel()
+        self.hardwareListenerTask.cancel()
         
 
     async def implement_simulation_mode(self, sim_mode):
@@ -58,6 +78,12 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
     async def do_emergencyPowerLightOff(self, id_data):
         await self.model.emergencyPowerLightOff()
 
+    async def stateloop(self):
+        while True:
+            print("current state: "+str(self.summary_state))
+            print("HW listener task: " + str(self.hardwareListenerTask))
+            await asyncio.sleep(1)
+
 
     async def hardwareListenerLoop(self):
         """ Periodically checks with the component to see if the wattage
@@ -80,7 +106,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             previousState = currentState
 
             #if the KiloArc error light is on, put the CSC into FAULT state   
-            if currentState.greenLED:  #TODO change this to redLED
+            if currentState.redLED:
                 try:
                     if self.model.bulb_on:
                         await self.model.emergencyPowerLightOff()
@@ -88,7 +114,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
                     print("Attempted emergency shutoff of light, but got error: "+ str(e))
                 self.summary_state = salobj.State.FAULT
 
-            print("***"+str(self.summary_state))
+            print("HW Loop running")
             await asyncio.sleep(self.hardware_listener_interval)
 
     async def telemetryLoop(self):
@@ -121,5 +147,5 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             # publish telemetry
             self.tel_bulbHours.set_put(bulbHours = float(self.model.component.bulbHours))
             self.tel_bulbWattHours.set_put(bulbHours = float(self.model.component.bulbWattHours))
-
+            print("Telemetry Loop Running")
             await asyncio.sleep(self.telemetry_publish_interval)

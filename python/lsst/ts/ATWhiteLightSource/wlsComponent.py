@@ -92,7 +92,8 @@ class WhiteLightSourceComponent():
         volts : float
             the voltage on this particular ADAM input channel
         """
-        readout = self.client.read_input_registers(channel, 1, unit=1).registers[0]
+        readout = self.client.read_input_registers(channel, 4, unit=1).registers[0]
+        print(readout)
         return self._countsToVolts(readout)
 
     def _writeVoltage(self, volts):
