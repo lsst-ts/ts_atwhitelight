@@ -54,8 +54,12 @@ class WhiteLightSourceComponent():
                 booleans representing the status LEDs. 
         """
         KiloArcStatus = namedtuple('KiloArcStatus', ['wattage','greenLED','blueLED','redLED','errorLED'])
-        status = KiloArcStatus(self.bulbState, self._readVoltage(0) > 3.0, self._readVoltage(1) > 3.0,\
-            self._readVoltage(2) > 3.0, self._readVoltage(3) > 3.0)
+        
+        voltages = self._readVoltage()
+        cutoff = 3.0
+        
+        status = KiloArcStatus(self.bulbState, voltages[0] > cutoff, voltages[1] > cutoff,\
+            voltages[2] > cutoff, voltages[3] > cutoff)
 
         return status
 
@@ -79,22 +83,20 @@ class WhiteLightSourceComponent():
         if output < 0: output = 0 # voltage equation should have a floor of 0. 
         return output
 
-    def _readVoltage(self, channel):
-        """ reads the voltage off of ADAM-6024's inputs for a given channel.
+    def _readVoltage(self):
+        """ reads the voltage off of ADAM-6024's inputs for channels 0-3.
 
         Parameters
         ----------
-        channel : int
-            analog input channel to read, in range of 0-5
+        None
 
         Returns
         -------
-        volts : float
-            the voltage on this particular ADAM input channel
+        volts : List of floats
+            the voltages on the ADAM's first 4 input channels
         """
-        readout = self.client.read_input_registers(channel, 4, unit=1).registers[0]
-        print(readout)
-        return self._countsToVolts(readout)
+        readout = self.client.read_input_registers(0, 4, unit=1).registers
+        return [self._countsToVolts(r) for r in readout]
 
     def _writeVoltage(self, volts):
         """ writes the requested voltage to the ADAM-6024 output register AO0

@@ -5,6 +5,7 @@ import SALPY_ATWhiteLight
 from .wlsModel import WhiteLightSourceModel
 import asyncio
 import time
+from pymodbus.exceptions import ConnectionException
 
 
 class WhiteLightSourceCSC(salobj.BaseCsc):
@@ -81,7 +82,6 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
     async def stateloop(self):
         while True:
             print("current state: "+str(self.summary_state))
-            print("HW listener task: " + str(self.hardwareListenerTask))
             await asyncio.sleep(1)
 
 
@@ -92,18 +92,32 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             *actually* read from the hardware; we only know what wattage
             the CSC is requesting.
         """
-        previousState = self.model.component.checkStatus()
+        # if we can't connect to the ADAM, stop loops and go to FAULT state
+        try:
+            previousState = self.model.component.checkStatus()
+        except ConnectionException:
+            self.summary_state = salobj.State.FAULT
+            self.telemetryLoopTask.cancel()
+            self.hardwareListenerTask.cancel()
+        
         while True:
-            currentState = self.model.component.checkStatus()
-            if currentState != previousState:
-                print("Voltage change detected! \n" + str(currentState))
-                self.evt_whiteLightStatus.set_put(
-                    wattageChange = float(currentState.wattage),
-                    coolingDown = currentState.blueLED,
-                    acceptingCommands = currentState.greenLED,
-                    error = currentState.redLED,
-                )
-            previousState = currentState
+            #if we lose connection to the ADAM, stop loops and go to FAULT state
+            try:
+                currentState = self.model.component.checkStatus()
+                if currentState != previousState:
+                    print("Voltage change detected! \n" + str(currentState))
+                    self.evt_whiteLightStatus.set_put(
+                        wattageChange = float(currentState.wattage),
+                        coolingDown = currentState.blueLED,
+                        acceptingCommands = currentState.greenLED,
+                        error = currentState.redLED,
+                    )
+                previousState = currentState
+            except ConnectionException:
+                self.summary_state = salobj.State.FAULT
+                self.telemetryLoopTask.cancel()
+                self.hardwareListenerTask.cancel()
+            
 
             #if the KiloArc error light is on, put the CSC into FAULT state   
             if currentState.redLED:
