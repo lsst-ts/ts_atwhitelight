@@ -4,6 +4,7 @@ from pymodbus.client.sync import ModbusTcpClient as ModbusClient
 from lsst.ts import salobj
 from collections import namedtuple
 import time
+from pymodbus.exceptions import ConnectionException, ModbusIOException
 
 
 class WhiteLightSourceComponent():
@@ -95,8 +96,21 @@ class WhiteLightSourceComponent():
         volts : List of floats
             the voltages on the ADAM's first 4 input channels
         """
-        readout = self.client.read_input_registers(0, 4, unit=1).registers
-        return [self._countsToVolts(r) for r in readout]
+        try:
+            readout = self.client.read_input_registers(0, 4, unit=1)
+            return [self._countsToVolts(r) for r in readout.registers]
+        except AttributeError:
+            # read_input_registers apparently *returns* (not raises) a 
+            # ModbusIOException in the event of loss of ADAM network
+            # connectivity, which causes an AttributeError when we try
+            # to access the registers field. But the whole thing is 
+            # really a connectivity problem, so we re-raise it as a 
+            # ConnectionException, which we know how to handle. This
+            # is apparently a known issue with pymodbus so it may see
+            # a fix in a future version, which will require code 
+            # changes for us
+            # https://github.com/riptideio/pymodbus/issues/298
+            raise ConnectionException
 
     def _writeVoltage(self, volts):
         """ writes the requested voltage to the ADAM-6024 output register AO0
