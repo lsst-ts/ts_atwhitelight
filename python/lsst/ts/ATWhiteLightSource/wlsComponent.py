@@ -100,15 +100,15 @@ class WhiteLightSourceComponent():
             readout = self.client.read_input_registers(0, 4, unit=1)
             return [self._countsToVolts(r) for r in readout.registers]
         except AttributeError:
-            # read_input_registers apparently *returns* (not raises) a 
+            # read_input_registers() *returns* (not raises) a
             # ModbusIOException in the event of loss of ADAM network
             # connectivity, which causes an AttributeError when we try
-            # to access the registers field. But the whole thing is 
-            # really a connectivity problem, so we re-raise it as a 
-            # ConnectionException, which we know how to handle. This
-            # is apparently a known issue with pymodbus so it may see
-            # a fix in a future version, which will require code 
-            # changes for us
+            # to access the registers field. But the whole thing is
+            # really a connectivity problem, so we re-raise it as a
+            # ConnectionException, which we know how to handle. Weird 
+            # exception handling is a known issue with pymodbus so it
+            # may see a fix in a future version, which may require 
+            # minor code changes on our part.
             # https://github.com/riptideio/pymodbus/issues/298
             raise ConnectionException
 

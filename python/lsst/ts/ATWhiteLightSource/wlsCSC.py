@@ -5,13 +5,43 @@ import SALPY_ATWhiteLight
 from .wlsModel import WhiteLightSourceModel
 import asyncio
 import time
+import enum
 from pymodbus.exceptions import ConnectionException
 
+
+class WLSDetailedState(enum.IntEnum):
+    """ For the White Light Source, detailed state is implemented
+        as a representation of the state of the KiloArc hardware,
+        based on its reported status. As such, there are four 
+        possible detailed states:
+
+        OFFLINE:    We are receiving no signal from the KiloArc;
+                    the status LED is not illuminated.
+        READY:      The KiloArc bulb is either illuminated, or it 
+                    is ready to be illuminated. Status LED is
+                    green.
+        COOLDOWN:   The bulb is off, and KiloArc's internal fans 
+                    are active. Status LED is blue. This state 
+                    lasts for 5m, and is independent of the 15m 
+                    software-enforced cooldown and warmup periods.
+        ERROR:      KiloArc is reporting an error. Status LED is 
+                    red. This always sends the CSC into a FAULT
+                    state. 
+        DISCONNECTED:We are unable to determine the state of the
+                    KiloArc because we have lost our connection
+                    to the ADAM device. 
+    """
+    OFFLINE = 1
+    READY = 2
+    COOLDOWN = 3
+    ERROR = 4
+    DISCONNECTED = 5
 
 class WhiteLightSourceCSC(salobj.BaseCsc):
     def __init__(self):
         super().__init__(SALPY_ATWhiteLight)
         self.model = WhiteLightSourceModel()
+        self.detailed_state = WLSDetailedState.OFFLINE
 
         self.telemetry_publish_interval = 5
         self.hardware_listener_interval = 2
@@ -23,6 +53,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         self.hardwareListenerTask = done_task
 
         asyncio.ensure_future(self.stateloop())
+        self.hardwareListenerTask = asyncio.ensure_future(self.hardwareListenerLoop())
 
     
         
@@ -31,8 +62,9 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         # don't let the user leave fault state if the KiloArc
         # is reporting an error
         if self.summary_state == salobj.State.FAULT:
-            if self.model.component.checkStatus().redLED: #TODO change this to redLED
+            if self.model.component.checkStatus().redLED:
                 raise RuntimeError("Can't enter Standby state while KiloArc still reporting errors")
+        self.hardwareListenerTask = asyncio.ensure_future(self.hardwareListenerLoop())
 
 
     def begin_enable(self, id_data):
@@ -41,7 +73,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         """
         print("begin_enable()")
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
-        self.hardwareListenerTask = asyncio.ensure_future(self.hardwareListenerLoop())
+        
 
     def begin_start(self, id_data):
         """ Executes during the STANDBY --> DISABLED state
@@ -49,12 +81,12 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         """
         print("begin_start()")
         self.telemetryLoopTask.cancel()
-        self.hardwareListenerTask.cancel()
+
         
     def begin_disable(self, id_data):
         print("begin_disable()")
         self.telemetryLoopTask.cancel()
-        self.hardwareListenerTask.cancel()
+
         
 
     async def implement_simulation_mode(self, sim_mode):
@@ -81,7 +113,10 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
 
     async def stateloop(self):
         while True:
-            print("current state: "+str(self.summary_state))
+            print("current state:  "+str(self.summary_state))
+            print("detailed state: "+str(self.detailed_state))
+            print(self.hardwareListenerTask)
+            print(self.telemetryLoopTask)
             await asyncio.sleep(1)
 
 
@@ -93,10 +128,12 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             the CSC is requesting.
         """
         # if we can't connect to the ADAM, stop loops and go to FAULT state
+        # and DISCONNECTED detailed state.
         try:
             previousState = self.model.component.checkStatus()
         except ConnectionException:
             self.summary_state = salobj.State.FAULT
+            self.detailed_state = WLSDetailedState.DISCONNECTED
             self.telemetryLoopTask.cancel()
             self.hardwareListenerTask.cancel()
         
@@ -112,9 +149,19 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
                         acceptingCommands = currentState.greenLED,
                         error = currentState.redLED,
                     )
+                # update detaile state
+                if currentState.greenLED:
+                    self.detailed_state = WLSDetailedState.READY
+                elif currentState.blueLED:
+                    self.detailed_state = WLSDetailedState.COOLDOWN
+                elif currentState.redLED:
+                    self.detailed_state = WLSDetailedState.ERROR
+                else:
+                    self.detailed_state = WLSDetailedState.OFFLINE
                 previousState = currentState
             except ConnectionException:
                 self.summary_state = salobj.State.FAULT
+                self.detailed_state = WLSDetailedState.DISCONNECTED
                 self.telemetryLoopTask.cancel()
                 self.hardwareListenerTask.cancel()
             
@@ -127,6 +174,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
                 except salobj.ExpectedError as e:
                     print("Attempted emergency shutoff of light, but got error: "+ str(e))
                 self.summary_state = salobj.State.FAULT
+                self.detailed_state = WLSDetailedState.ERROR
 
             print("HW Loop running")
             await asyncio.sleep(self.hardware_listener_interval)
