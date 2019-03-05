@@ -38,8 +38,8 @@ class WLSDetailedState(enum.IntEnum):
     DISCONNECTED = 5
 
 class WhiteLightSourceCSC(salobj.BaseCsc):
-    def __init__(self):
-        super().__init__(SALPY_ATWhiteLight)
+    def __init__(self, sim_mode = 0):
+        super().__init__(SALPY_ATWhiteLight, initial_simulation_mode = sim_mode)
         self.model = WhiteLightSourceModel()
         self.detailed_state = WLSDetailedState.OFFLINE
 
@@ -73,7 +73,6 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         """
         print("begin_enable()")
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
-        
 
     def begin_start(self, id_data):
         """ Executes during the STANDBY --> DISABLED state
@@ -82,14 +81,11 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         print("begin_start()")
         self.telemetryLoopTask.cancel()
 
-        
     def begin_disable(self, id_data):
         print("begin_disable()")
         self.telemetryLoopTask.cancel()
 
-        
-
-    async def implement_simulation_mode(self, sim_mode):
+    def implement_simulation_mode(self, sim_mode):
         """ Swaps between real and simulated component upon request.
         """
         print("sim mode " + str(sim_mode))
@@ -115,8 +111,8 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         while True:
             print("current state:  "+str(self.summary_state))
             print("detailed state: "+str(self.detailed_state))
-            print(self.hardwareListenerTask)
-            print(self.telemetryLoopTask)
+           # print(self.hardwareListenerTask)
+           # print(self.telemetryLoopTask)
             await asyncio.sleep(1)
 
 
@@ -135,7 +131,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             self.summary_state = salobj.State.FAULT
             self.detailed_state = WLSDetailedState.DISCONNECTED
             self.telemetryLoopTask.cancel()
-            self.hardwareListenerTask.cancel()
+            self.hardwareListenerTask.cancel() #TODO do we really want to stop this one?
         
         while True:
             #if we lose connection to the ADAM, stop loops and go to FAULT state
@@ -149,7 +145,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
                         acceptingCommands = currentState.greenLED,
                         error = currentState.redLED,
                     )
-                # update detaile state
+                # update detailed state
                 if currentState.greenLED:
                     self.detailed_state = WLSDetailedState.READY
                 elif currentState.blueLED:

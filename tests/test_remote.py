@@ -10,7 +10,7 @@ from lsst.ts.ATWhiteLightSource.wlsCSC import WhiteLightSourceCSC
 
 class WhiteLightSourceRemoteTests(unittest.TestCase):
     def setUp(self):
-        self.csc = WhiteLightSourceCSC()
+        self.csc = WhiteLightSourceCSC(sim_mode = 1)
         self.csc.summary_state = salobj.State.ENABLED
 
         # set short cooldown and warmup periods so the tests don't take hours

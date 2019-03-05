@@ -10,14 +10,16 @@ from collections import namedtuple
 
 class WhiteLightSourceCSCTests(unittest.TestCase):
     def setUp(self):
-        self.csc = WhiteLightSourceCSC()
+        self.csc = WhiteLightSourceCSC(sim_mode=1)
         self.csc.summary_state = salobj.State.ENABLED
+        
 
         # set short cooldown and warmup periods so the tests don't take hours
         self.csc.model.cooldownPeriod = 3
         self.csc.model.warmupPeriod = 3
 
         self.remote = salobj.Remote(SALPY_ATWhiteLight, index=None)
+
 
     def slp(self, watts):
         """wraps the wattage number up in something that looks like id_data
