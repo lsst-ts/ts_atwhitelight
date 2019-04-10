@@ -9,6 +9,29 @@ from pymodbus.exceptions import ConnectionException, ModbusIOException
 
 class WhiteLightSourceComponent():
     """ Class that handles communication with the white light source hardware
+        
+        Parameters
+        ----------
+        ip : string
+            the IP address of the ADAM 6024 controller
+        port : int
+            the port number for the ADAM 6024 controller
+        
+        Attributes
+        ----------
+        client : ModbusClient
+            the pymodbus object representing the ADAM 6024
+        bulbHours : float
+            uptime of this bulb
+        bulbWattHours : float
+            uptime in this bulb in watt-hours
+        bulbcount : int
+            number of bulbs we've had.
+        bulbHoursLastUpdate: float
+            the time of the last update for bulb uptime
+        bulbstate : float
+            the current wattage the bulb is at. 
+
     """
 
     def __init__(self, ip='140.252.33.160', port=502):

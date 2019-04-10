@@ -38,6 +38,26 @@ class WLSDetailedState(enum.IntEnum):
     DISCONNECTED = 5
 
 class WhiteLightSourceCSC(salobj.BaseCsc):
+    """ 
+    The White Light Source CSC class
+
+    Parameters
+    ----------
+    sim_mode : int
+        0 to init the CSC to control the actual hardware
+        1 to init the CSC in simulation mode
+    
+    Attributes
+    ----------
+    model : WhiteLightSourceModel
+        the model representing the white light hardware
+    detailed_state : WLSDetailedStateEnum
+        represents the reported state of the Kiloarc
+    telemetry_publish_interval: int/float
+        frequency, in seconds, that we publish telemetry
+    hardware_listener_interval : int/float
+        frequency, in seconds, that we check in on the hardware
+    """
     def __init__(self, sim_mode = 0):
         super().__init__(SALPY_ATWhiteLight, initial_simulation_mode = sim_mode)
         self.model = WhiteLightSourceModel()
@@ -59,6 +79,10 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         
 
     def begin_standby(self,id_data):
+        """ When we leave fault state to enter standby, we 
+            need to make sure that the hardware isn't still
+            reporting errors
+        """
         # don't let the user leave fault state if the KiloArc
         # is reporting an error
         if self.summary_state == salobj.State.FAULT:
@@ -94,20 +118,37 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         else: self.model.component = self.model.simComponent
 
     async def do_powerLightOn(self, id_data):
+        """ Powers the light on. It will go to 1200 watts, then drop
+            back down to 800. Not available of the lamp is still
+            cooling down.
+        """
         self.assert_enabled("powerLightOn")
         await self.model.powerLightOn()
 
     async def do_powerLightOff(self, id_data):
+        """ Powers the light off. Not available of the lamp is still 
+            warming up.
+        """
         await self.model.setLightPower(0)
 
     async def do_setLightPower(self, id_data):
+        """ Sets the light power. id_data must contain a topic that 
+            specifies the wattage, between 800 and 1200. Numbers 
+            below 800 will be treated like a powerLightOff command.
+        """
         self.assert_enabled("setLightPower")
         await self.model.setLightPower(id_data.data.setLightPower)
 
     async def do_emergencyPowerLightOff(self, id_data):
+        """ Powers the light off. This one ignores the warmup period
+            that the CSC normally enforces.
+        """
         await self.model.emergencyPowerLightOff()
 
     async def stateloop(self):
+        """
+        periodically prints the current state. For debug
+        """
         while True:
             print("current state:  "+str(self.summary_state))
             print("detailed state: "+str(self.detailed_state))

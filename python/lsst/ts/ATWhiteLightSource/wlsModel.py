@@ -9,7 +9,40 @@ from lsst.ts import salobj
 
 
 class WhiteLightSourceModel():
+    """ 
+    The White Light Source Model. This keeps track of the state of
+    the Kiloarc, and enforces cooldown and warmup periods. 
 
+    Attributes
+    ----------
+    realComponent : WhiteLightSourceComponent
+        the hardware communication class. Needs an IP and port
+    simComponent : WhiteLightSourceComponentSimulator
+        simulates the real component, but doesn't talk to hardware
+    component : one of the two above classes
+        points to whichever of the above components we're actually using
+    startupWattage : float 800-1200
+        when we start the bulb, it initially goes to this wattage
+    defaultWattage : float 800-1200
+        after the startup wattage, we transition to the default
+    startupTime : float
+        how log does startupWattage last?
+    on_task : asyncio.Future
+        keeps track of whether we are currently turning on
+    warmup_task : asyncio.Future
+        keeps track of whether we are currently in the warmup period
+    cooldown_task : asyncio.Future
+        keeps track of whether we are currently in the cooldown period
+    off_time : float
+        the time the bulb was last turned off
+    on_time : float
+        the time the bulb was last turned on
+    cooldownPeriod : float
+        how long to we wait after turning off before we can turn back on
+    warmupPeriod : float
+        how long do we wait after turing on before we can turn back off
+    """
+    
     def __init__(self):
         self.realComponent = WhiteLightSourceComponent()
         self.simComponent = WhiteLightSourceComponentSimulator()

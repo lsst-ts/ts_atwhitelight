@@ -8,7 +8,28 @@ class WhiteLightSourceComponentSimulator():
     """ A fake version of the White Light Source component that doesn't
         communicate with hardware at all but prints the wattage
         of a simulated WLS Bulb.
-    """
+        
+        Parameters
+        ----------
+        ip : string
+            the IP address of the ADAM 6024 controller
+        port : int
+            the port number for the ADAM 6024 controller
+        
+        Attributes
+        ----------
+        client : ModbusClient
+            the pymodbus object representing the ADAM 6024
+        bulbHours : float
+            uptime of this bulb
+        bulbWattHours : float
+            uptime in this bulb in watt-hours
+        bulbHoursLastUpdate: float
+            the time of the last update for bulb uptime
+        bulbstate : float
+            the current wattage the bulb is at. 
+        """
+
 
     def __init__(self, ip='140.252.33.160', port=502):
         self.bulbHours = 0  # Read this from EFD when we initialize
