@@ -109,7 +109,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         print("begin_disable()")
         self.telemetryLoopTask.cancel()
 
-    def implement_simulation_mode(self, sim_mode):
+    async def implement_simulation_mode(self, sim_mode):
         """ Swaps between real and simulated component upon request.
         """
         print("sim mode " + str(sim_mode))
@@ -144,6 +144,45 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             that the CSC normally enforces.
         """
         await self.model.emergencyPowerLightOff()
+
+    async def do_setTemperature(self,id_data):
+    """ Sets the target temperature for the chiller
+
+                Parameters
+                ----------
+                temperature : float
+
+                Returns
+                -------
+                None
+            """
+        pass
+
+    async def do_powerChillerOn(self,id_data):
+        """ Powers chiller on
+
+                Parameters
+                ----------
+                None
+
+                Returns
+                -------
+                None
+            """
+        pass
+
+    async def do_powerChillerOff(self,id_data):
+        """ powers chiller off. Not available when bulb is on. 
+
+                Parameters
+                ----------
+                None
+
+                Returns
+                -------
+                None
+            """
+        pass
 
     async def stateloop(self):
         """
@@ -220,6 +259,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         """ Publish WLS Telemetry. This includes:
                 bulb uptime (hours)
                 bulb uptime (watt-hours)
+                Chiller fan speed, coolant temperature
 
             Parameters
             ----------
@@ -230,6 +270,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             None
         """
         while True:
+            #KILOARC
 
             # calculate uptime and wattage since the last iteration of this loop
             lastIntervalUptime = time.time()/3600 - self.model.component.bulbHoursLastUpdate
@@ -246,5 +287,10 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             # publish telemetry
             self.tel_bulbHours.set_put(bulbHours = float(self.model.component.bulbHours))
             self.tel_bulbWattHours.set_put(bulbHours = float(self.model.component.bulbWattHours))
+
+
+            #CHILLER
+
+
             print("Telemetry Loop Running")
             await asyncio.sleep(self.telemetry_publish_interval)
