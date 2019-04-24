@@ -125,7 +125,7 @@ class ChillerPacketEncoder(object):
     def readSupplyTemp(self):
         """
         Command ID 04
-        Generates the ascii string that requests a the 
+        Generates the ascii string that requests the 
         chiller's supply temperature
         
         Parameters

@@ -145,8 +145,8 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         """
         await self.model.emergencyPowerLightOff()
 
-    async def do_setTemperature(self,id_data):
-    """ Sets the target temperature for the chiller
+    async def do_setChillerTemperature(self,id_data):
+        """ Sets the target temperature for the chiller
 
                 Parameters
                 ----------
@@ -155,7 +155,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
                 Returns
                 -------
                 None
-            """
+        """
         pass
 
     async def do_powerChillerOn(self,id_data):

@@ -62,7 +62,7 @@ class WhiteLightSourceModel():
         self.warmupPeriod = 900
 
     async def powerLightOn(self):
-        """ Signals the Horiba device to power light on.
+        """ Signals the Horiba KiloArc to power light on.
             We always set the brightness to self.startupWattage for a
             moment (self.startupTime), then step it back down to the
             default.
