@@ -1,8 +1,8 @@
 from binascii import hexlify
 
-
+__all__ = ["ChillerPacketEncoder"]
 class ChillerPacketEncoder(object):
-    def __init__(self)
+    def __init__(self):
         self.device_id = "01"
 
 
@@ -20,10 +20,9 @@ class ChillerPacketEncoder(object):
         -------
         checksum : 2-character ascii string
         """
-
         total = 0x0
         for char in st:
-            total = total + int(hexlify(char), 16)
+            total = total + int(hexlify(bytes(char, "ascii")), 16)
         return hex(total)[-2:]
 
     def _commandwrapper(self, st):
@@ -82,7 +81,7 @@ class ChillerPacketEncoder(object):
         if num < 0:
             sign = "-"
         else: sign = "+" 
-
+        num = float(num)
         rtemp = round(num,1)
         tempstr = str(rtemp)
 
@@ -197,7 +196,28 @@ class ChillerPacketEncoder(object):
 
         message = "09rProsFlo"
         return self._commandwrapper(message)
-    
+
+    def setChillerStatus(self, status):
+        """
+        Command ID 15
+        Generates the ascii string that sets the chiller status
+        status 0 = standby
+        status 1 = run
+        
+        Parameters
+        ----------
+        status : int 
+
+        Returns
+        -------
+        string
+
+        """
+        if status != 0 and status != 1:
+            raise Exception
+        output = self._commandwrapper('15sStatus_' + str(status))
+        return output
+
     def setControlTemp(self, temp):
         """
         Command ID 17
