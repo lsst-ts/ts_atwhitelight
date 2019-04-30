@@ -52,7 +52,8 @@ class ChillerPacketEncoder(object):
 
         start = "." + self.device_id + st
         cs = self._checksum(start)
-        return start + cs + "\r"
+        outstr = start + cs + "\r"
+        return bytes(outstr,'ascii')
 
     def _tempformatter(self, num):
         """
