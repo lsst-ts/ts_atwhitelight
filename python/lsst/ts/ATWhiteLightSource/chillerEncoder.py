@@ -1,6 +1,7 @@
 from binascii import hexlify
 
 __all__ = ["ChillerPacketEncoder"]
+
 class ChillerPacketEncoder(object):
     def __init__(self):
         self.device_id = "01"
@@ -28,8 +29,8 @@ class ChillerPacketEncoder(object):
     def _commandwrapper(self, st):
         """
         Command packets begin with a period character and
-        device ID, and end with a checksum and a carriage 
-        return. This function takes an input string
+        device ID, and end with a checksum and a return character.
+        This function takes an input string
         containing the command id, command name, and
         optional data payload, and performs the checksum
         and assembles the boilerplate around it. 
@@ -328,3 +329,8 @@ class ChillerPacketEncoder(object):
             raise Exception
         output = self._commandwrapper(message)
         return output
+
+    def readFanSpeed(self, fanNumber):
+        if fanNumber > 4 or fanNumber < 1: raise Exception
+        cmdid = fanNumber + 49
+        return self._commandwrapper(message)
