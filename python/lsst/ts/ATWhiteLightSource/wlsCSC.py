@@ -78,7 +78,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
     
         
 
-    def begin_standby(self,id_data):
+    async def begin_standby(self,id_data):
         """ When we leave fault state to enter standby, we 
             need to make sure that the hardware isn't still
             reporting errors
@@ -91,21 +91,21 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         self.hardwareListenerTask = asyncio.ensure_future(self.hardwareListenerLoop())
 
 
-    def begin_enable(self, id_data):
+    async def begin_enable(self, id_data):
         """ Upon entering ENABLE state, we need to start 
             the telemetry and hardware listener loops.
         """
         print("begin_enable()")
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
 
-    def begin_start(self, id_data):
+    async def begin_start(self, id_data):
         """ Executes during the STANDBY --> DISABLED state
             transition. Confusing name, IMO. 
         """
         print("begin_start()")
         self.telemetryLoopTask.cancel()
 
-    def begin_disable(self, id_data):
+    async def begin_disable(self, id_data):
         print("begin_disable()")
         self.telemetryLoopTask.cancel()
 
