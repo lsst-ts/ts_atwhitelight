@@ -220,6 +220,8 @@ class ChillerPacketEncoder(object):
         output = self._commandwrapper('15sStatus_' + str(status))
         return output
 
+    
+
     def setControlTemp(self, temp):
         """
         Command ID 17
@@ -238,6 +240,64 @@ class ChillerPacketEncoder(object):
 
         data = self._tempformatter(temp)
         output = self._commandwrapper('17sCtrlTmp' + data)
+        return output
+
+    def readAlarmStateL1(self):
+        """
+        Command ID 18
+        Generates the ascii string to read the alarm state
+        
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        string
+
+        """
+
+        output = self._commandwrapper('18rAlrmLv1')
+        return output
+
+    def readAlarmStateL2(self, sublevel=1):
+        """
+        Command ID 19
+        Generates the ascii string to read the alarm state
+        For some reason there are two "levels" within level
+        2... We interpret any input other than 1 as 2. 
+  
+        Parameters
+        ----------
+        sublevel : int
+            which set of L2 alarms to query
+            should be 1 or 2
+
+        Returns
+        -------
+        string
+        """
+        if sublevel != 1:
+            sublevel = 2
+        output = self._commandwrapper('19rAlrmLv2' + str(sublevel))
+        return output
+
+    def readWarningState(self):
+        """
+        Command ID 20
+        Generates the ascii string to read the warning state
+        
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        string
+
+        """
+
+        output = self._commandwrapper('20rWarnLv1')
         return output
 
     def setWarning(self, warntype, value):
@@ -334,3 +394,5 @@ class ChillerPacketEncoder(object):
         if fanNumber > 4 or fanNumber < 1: raise Exception
         cmdid = fanNumber + 49
         return self._commandwrapper(message)
+
+    
