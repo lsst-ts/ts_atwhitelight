@@ -1,8 +1,9 @@
 import asyncio
-from queue import Queue
+from queue import PriorityQueue
 from enum import IntEnum
 import binascii
-from chillerComponent import CHillerComponent
+from chillerComponent import ChillerComponent
+from chillerEncoder import ChillerPacketEncoder
 
 
 class ControlStatus(IntEnum):
@@ -27,6 +28,12 @@ class AlarmStatus(IntEnum):
     """
     NOALARM = 0
     ALARM = 1
+
+
+class DriveMode(IntEnum):
+    """ARe we heating or cooling"""
+    COOLMODE = 0 
+    HEATMODE = 1
 
 
 class WarningStatus(IntEnum):
@@ -116,10 +123,14 @@ class ChillerModel():
         self.alarms = Alarms()
         self.response_dict = {
             "01": self.watchdog_decode,
+            "03": self.readSetTemp_decode,
             "04": self.readSupplyTemp_decode,
             "07": self.readReturnTemp_decode,
             "08": self.readAmbientTemp_decode,
             "09": self.readProcessFlow_decode,
+            "10": self.readTECBank1_decode,
+            "11": self.readTECBank2_decode,
+            "13": self.readTEDriveLevel_decode,
             "15": self.setChillerStatus_decode,
             "17": self.setControlTemp_decode,
             "18": self.readAlarmStateL1_decode,
@@ -135,12 +146,21 @@ class ChillerModel():
             "28": self.setAlarm_decode,
             "29": self.setAlarm_decode,
             "30": self.setAlarm_decode,
+            "49": self.readUptime_decode,
+            "50": self.readFanSpeed_decode,
+            "51": self.readFanSpeed_decode,
+            "52": self.readFanSpeed_decode,
+            "53": self.readFanSpeed_decode
         }
+
+        self.q = PriorityQueue()
+        self.cpe = ChillerPacketEncoder()
 
         #chiller state
         self.controlStatus = None
         self.pumpStatus = None
         self.chillerStatus = None
+        self.setTemp = None
         self.supplyTemp = None
         self.returnTemp = None
         self.ambientTemp = None
@@ -148,13 +168,15 @@ class ChillerModel():
         self.setTemperature = None
         self.tecBank1 = None
         self.tecBank2 = None
-        self.teDrive = None
+        self.teDrivePct = None
+        self.teDriveMode = None
         self.alarmPresent = False
         self.warningPresent = False
         self.fan1speed = None
         self.fan2speed = None
         self.fan3speed = None
         self.fan4speed = None
+        self.chillerUptime = None
 
         asyncio.ensure_future(self.telemloop())
 
@@ -190,7 +212,10 @@ class ChillerModel():
         print("checksum: " + str(checksum_from_chiller))
         print("response method: " + str(response_method))
 
-        response_method(data)
+        if int(cmd_id) in (50,51,52,53):
+            response_method(int(msg[13]), data)
+        else:
+            response_method(data)
 
 
     def watchdog_decode(self, msg):
@@ -217,6 +242,23 @@ class ChillerModel():
             temp = 0 - temp
         return(temp)
 
+    def tecBankParser(self, msg):
+        """
+        parses tec bank amps dc into a python float.
+        """
+        cur = 0
+        whole = int(msg[1])
+        dec = int(msg[2:5])
+        cur += whole
+        cur += dec/1000
+        if msg[0] == "-":
+            cur = 0 - cur
+        return(cur)
+
+    def readSetTemp_decode(self, msg):
+        print(msg)
+        self.setTemp = self.tempParser(msg)
+
     def readSupplyTemp_decode(self, msg):
         self.supplyTemp = self.tempParser(msg)
 
@@ -229,6 +271,21 @@ class ChillerModel():
     def readProcessFlow_decode(self, msg):
         # flow uses the same formatting as temp
         self.processFlow = self.tempParser(msg)
+    
+    def readTECBank1_decode(self, msg):
+        self.tecBank1 = self.tecBankParser(msg)
+    
+    def readTECBank2_decode(self, msg):
+        self.tecBank2 = self.tecBankParser(msg)
+
+    def readTEDriveLevel_decode(self, msg):
+        pct = int(msg[:3])/100
+        if msg[4] == "H":
+            self.teDriveMode = DriveMode(1)
+        elif msg[4] == "C":
+            self.teDriveMode = DriveMode(0)
+        self.teDrivePct = pct
+
 
     def setChillerStatus_decode(self, msg):
         SS = ChillerStatus(int(msg[0]))
@@ -281,19 +338,46 @@ class ChillerModel():
     def setAlarm_decode(self, msg):
         pass
 
-    def readFanSpeed_decode(self, msg):
-        pass
+    def readUptime_decode(self,msg):
+        self.chillerUptime = int(msg)
 
-    async def telem_gather(self):
+
+    def readFanSpeed_decode(self, fanNum, msg):
+        if fanNum == 1:
+            self.fan1speed = int(msg)
+        elif fanNum == 2:
+            self.fan2speed = int(msg)
+        elif fanNum == 3:
+            self.fan3speed = int(msg)
+        elif fanNum == 4:
+            self.fan4speed = int(msg)
+
+    async def telemloop(self):
         """
         Queries the chiller for all the telemetry we need to publish, and let's us know when it's done. 
         """
-        telem_task = asyncio.Future()
-        telem_task.set_result(None)
+
+        while True:
+            if self.q.empty():
+                self.q.put((1, self.cpe.readFanSpeed(1)))
+                self.q.put((1, self.cpe.readFanSpeed(2)))
+                self.q.put((1, self.cpe.readFanSpeed(3)))
+                self.q.put((1, self.cpe.readFanSpeed(4)))
+                self.q.put((1, self.cpe.readSetTemp()))
+                self.q.put((1, self.cpe.readSupplyTemp()))
+                self.q.put((1, self.cpe.readReturnTemp()))
+                self.q.put((1, self.cpe.readAmbientTemp()))
+                self.q.put((1, self.cpe.readProcessFlow()))
+                self.q.put((1, self.cpe.readTEDriveLevel()))
+                self.q.put((1, self.cpe.readTECBank1()))
+                self.q.put((1, self.cpe.readTECBank2()))
+            asyncio.sleep(10)
+
 
     def _sorter(self, num):
         """
-        Takes a number and returns a 4-bit binary representation in the form of a tuple of zeroes and ones
+        Takes a number 0-15 and returns a 4-bit binary representation in the form of a tuple of zeroes 
+        and ones. Used to decode error messages from chiller. 
         """
         if num > 15:
             raise Exception

@@ -123,6 +123,24 @@ class ChillerPacketEncoder(object):
         message = "01WatchDog"
         return self._commandwrapper(message)
 
+    def readSetTemp(self):
+        """
+        Command ID 03
+        Generates the ascii string that requests the 
+        chiller's set temperature
+        
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        string
+
+        """
+        msg = "03rSetTemp"
+        return self._commandwrapper(msg)
+
     def readSupplyTemp(self):
         """
         Command ID 04
@@ -198,6 +216,66 @@ class ChillerPacketEncoder(object):
 
         message = "09rProsFlo"
         return self._commandwrapper(message)
+
+    def readTECBank1(self):
+        """
+        Command ID 10
+        Generates the ascii string that requests a the 
+        chiller's TEC Bank1 current, in DC Amps
+        
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        string
+
+        """
+
+        message = "10rTECB1Cr"
+        return self._commandwrapper(message)
+
+    def readTECBank2(self):
+        """
+        Command ID 11
+        Generates the ascii string that requests a the 
+        chiller's TEC Bank1 current, in DC Amps
+        
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        string
+
+        """
+
+        message = "11rTECDrLv"
+        return self._commandwrapper(message)
+
+    def readTEDriveLevel(self):
+        """
+        Command ID 13
+        Generates the ascii string that requests a the 
+        chiller's ThermoElectric Drive level, returning
+        a percentage and a C or H for cool/heat mode.
+        
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        string
+
+        """
+
+        message = "13rTECB2Cr"
+        return self._commandwrapper(message)
+
+    
 
     def setChillerStatus(self, status):
         """
@@ -390,9 +468,30 @@ class ChillerPacketEncoder(object):
         output = self._commandwrapper(message)
         return output
 
+    def readUptime(self):
+        msg = "49rUpTime_"
+        return self._commandwrapper(msg)
+
     def readFanSpeed(self, fanNumber):
-        if fanNumber > 4 or fanNumber < 1: raise Exception
+        """
+        Command IDs 50-53
+        Generates the ascii string that reads the fan speed, in Hz. 
+
+        
+        Parameters
+        ----------
+        fanNumber : int in range of 1-4
+
+        Returns
+        -------
+        string
+
+        """
+
+        if fanNumber > 4 or fanNumber < 1:
+            raise Exception
         cmdid = fanNumber + 49
+        message = str(cmdid) + "rFanSpd" + str(fanNumber)
         return self._commandwrapper(message)
 
     
