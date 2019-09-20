@@ -289,7 +289,6 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             self.tel_bulbWattHours.set_put(bulbHours = float(self.model.component.bulbWattHours))
 
 
-            #CHILLER
 
 
             print("Telemetry Loop Running")

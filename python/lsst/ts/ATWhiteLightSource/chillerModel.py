@@ -154,6 +154,7 @@ class ChillerModel():
         }
 
         self.q = PriorityQueue()
+        self.component = ChillerComponent()
         self.cpe = ChillerPacketEncoder()
 
         #chiller state
@@ -165,7 +166,6 @@ class ChillerModel():
         self.returnTemp = None
         self.ambientTemp = None
         self.processFlow = None
-        self.setTemperature = None
         self.tecBank1 = None
         self.tecBank2 = None
         self.teDrivePct = None
@@ -178,8 +178,44 @@ class ChillerModel():
         self.fan4speed = None
         self.chillerUptime = None
 
-        asyncio.ensure_future(self.telemloop())
+    def __str__(self):
+        output = "Control Status: " + str(self.controlStatus) \
+            + ", Pump Status: " + str(self.pumpStatus) \
+            + ", Chiller Status: " + str(self.chillerStatus) \
+            + ", Set Temp " + str(self.setTemp) \
+            + ", Supply Temp " + str(self.supplyTemp) \
+            + ", Return Temp: " + str(self.returnTemp) \
+            + ", Ambient Temp: " + str(self.ambientTemp) \
+            + ", Process Flow: " + str(self.processFlow) \
+            + ", TEC Bank 1: " + str(self.tecBank1) \
+            + ", TEC Bank 2: " + str(self.tecBank2) \
+            + ", TE Drive Level: " + str(self.teDrivePct) \
+            + ", TE Drive Mode: " + str(self.teDriveMode) \
+            + ", Fan1 Speed: " + str(self.fan1speed) \
+            + ", Fan2 Speed: " + str(self.fan2speed) \
+            + ", Fan3 Speed: " + str(self.fan3speed) \
+            + ", Fan4 Speed: " + str(self.fan4speed) \
+            + ", Uptime: " + str(self.chillerUptime)
 
+        return output
+
+    async def connect(self):
+        """
+        connect to the chiller and start the background tasks that keep the model up-to-date
+        """
+        await self.component.connect()
+        self.queue_task = asyncio.ensure_future(self.queueloop())
+        self.watchdog_task = asyncio.ensure_future(self.watchdogloop())
+
+    async def disconnect(self):
+        """
+        disconnect from chiller and halt loops
+        """
+        self.queue_task.cancel()
+        self.watchdog_task.cancel()
+        await self.component.disconnect()
+
+    
     def responder(self, msg):
         """
         Figure out what data is in a response and pass it along to the appropriate handling method.
@@ -230,6 +266,18 @@ class ChillerModel():
         self.pumpStatus = PS
         self.alarmPresent = AS
         self.warningPresent = WS
+
+        #if watchdog tells us something is wrong, figure out what it is with a high priority
+        if self.alarmPresent:
+            self.q.put((0, self.cpe.readAlarmStateL1()))
+            self.q.put((0, self.cpe.readAlarmStateL2()))
+
+        if self.warningPresent:
+            self.q.put((0, self.cpe.readWarningState()))
+
+
+
+            
 
     def tempParser(self, msg):
         """
@@ -352,26 +400,46 @@ class ChillerModel():
         elif fanNum == 4:
             self.fan4speed = int(msg)
 
-    async def telemloop(self):
+    async def queueloop(self):
         """
-        Queries the chiller for all the telemetry we need to publish, and let's us know when it's done. 
+        Every 10 seconds, checks to see if the queue is empty and if so, puts all the telemetry in queries in it. 
+        Telemetry is lower priority so commands will always jump to the front of the queue. 
+        """
+        print("Starting queue loop")
+        while True:
+            if self.q.empty():
+                self.q.put((2, self.cpe.readFanSpeed(1)))
+                self.q.put((2, self.cpe.readFanSpeed(2)))
+                self.q.put((2, self.cpe.readFanSpeed(3)))
+                self.q.put((2, self.cpe.readFanSpeed(4)))
+                self.q.put((2, self.cpe.readSetTemp()))
+                self.q.put((2, self.cpe.readSupplyTemp()))
+                self.q.put((2, self.cpe.readReturnTemp()))
+                self.q.put((2, self.cpe.readAmbientTemp()))
+                self.q.put((2, self.cpe.readProcessFlow()))
+                self.q.put((2, self.cpe.readTEDriveLevel()))
+                self.q.put((2, self.cpe.readTECBank1()))
+                self.q.put((2, self.cpe.readTECBank2()))
+                self.q.put((2, self.cpe.readUptime()))
+
+            pop = self.q.get()
+            resp = await self.component.send_command(pop[1])
+
+            #all actions taken in response to messages from the chiller are handled by responder
+            self.responder(resp)
+            await asyncio.sleep(1)
+
+    async def watchdogloop(self):
+        """
+        Every 5 seconds, throw a watchdog on the queue. This is the one that will let us know if there
+        are any warnings or alerts, so we check it more frequently.
         """
 
         while True:
-            if self.q.empty():
-                self.q.put((1, self.cpe.readFanSpeed(1)))
-                self.q.put((1, self.cpe.readFanSpeed(2)))
-                self.q.put((1, self.cpe.readFanSpeed(3)))
-                self.q.put((1, self.cpe.readFanSpeed(4)))
-                self.q.put((1, self.cpe.readSetTemp()))
-                self.q.put((1, self.cpe.readSupplyTemp()))
-                self.q.put((1, self.cpe.readReturnTemp()))
-                self.q.put((1, self.cpe.readAmbientTemp()))
-                self.q.put((1, self.cpe.readProcessFlow()))
-                self.q.put((1, self.cpe.readTEDriveLevel()))
-                self.q.put((1, self.cpe.readTECBank1()))
-                self.q.put((1, self.cpe.readTECBank2()))
-            asyncio.sleep(10)
+            self.q.put((1, self.cpe.watchdog()))
+            await asyncio.sleep(5)
+
+            
 
 
     def _sorter(self, num):

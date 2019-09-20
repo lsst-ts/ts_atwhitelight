@@ -1,12 +1,12 @@
 import asyncio
 import socket
+import logging
 
 
 class ChillerComponent(object):
     def __init__(self):
         self.ip = "140.252.33.70"
         self.port = 4001
-        self.testMessage = bytes(".0109rProsFlo2f\r", "ascii")
         self.connect_task = None
         self.reader = None
         self.writer = None
@@ -18,10 +18,9 @@ class ChillerComponent(object):
         if self.connected:
             raise RuntimeError("Already connected")
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect(('140.252.33.70', 4001))
+        s.connect((self.ip, self.port))
         self.connect_task = asyncio.open_connection(sock=s)
         self.reader, self.writer = await asyncio.wait_for(self.connect_task, self.timeout)
-
 
     async def disconnect(self):
         try:
@@ -43,6 +42,7 @@ class ChillerComponent(object):
         expResponse is a substring of the expected response
         that we will attempt to match against the actual response
         """
+
         self.writer.write(cmd)
         response = await self.reader.readuntil(separator=b'\r')
         return(response)
