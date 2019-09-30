@@ -37,6 +37,13 @@ class WhiteLightSourceComponentSimulator():
         self.bulbHoursLastUpdate = time.time()/3600
         self.bulbState = 0 #current wattage
 
+        self.greenStatusLED = True
+        self.blueStatusLED = False
+        self.redStatusLED = False
+        self.errorLED = False
+
+
+
 
 
     def setError(self, id):

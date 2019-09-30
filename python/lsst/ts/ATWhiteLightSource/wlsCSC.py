@@ -1,8 +1,9 @@
 __all__ = ["WhiteLightSourceCSC"]
 
 from lsst.ts import salobj
-import SALPY_ATWhiteLight
-from .wlsModel import WhiteLightSourceModel
+from wlsModel import WhiteLightSourceModel
+from chillerModel import ChillerModel
+import pathlib
 import asyncio
 import time
 import enum
@@ -37,7 +38,7 @@ class WLSDetailedState(enum.IntEnum):
     ERROR = 4
     DISCONNECTED = 5
 
-class WhiteLightSourceCSC(salobj.BaseCsc):
+class WhiteLightSourceCSC(salobj.ConfigurableCsc):
     """ 
     The White Light Source CSC class
 
@@ -58,64 +59,79 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
     hardware_listener_interval : int/float
         frequency, in seconds, that we check in on the hardware
     """
-    def __init__(self, sim_mode = 0):
-        super().__init__(SALPY_ATWhiteLight, initial_simulation_mode = sim_mode)
+    def __init__(self, config_dir=None, initial_state=salobj.State.STANDBY, initial_simulation_mode=0):
+        schema_path = pathlib.Path(__file__).resolve().parents[4].joinpath("schema", "whitelight.yaml")
+        super().__init__("ATWhiteLight", index=0, schema_path=schema_path, config_dir=config_dir,
+                         initial_state=initial_state, initial_simulation_mode=initial_simulation_mode)
         self.model = WhiteLightSourceModel()
+        
         self.detailed_state = WLSDetailedState.OFFLINE
 
         self.telemetry_publish_interval = 5
         self.hardware_listener_interval = 2
+        self.chillerModel = ChillerModel()
 
         #setup asyncio tasks for the loops
         done_task = asyncio.Future()
         done_task.set_result(None)
         self.telemetryLoopTask = done_task
-        self.hardwareListenerTask = done_task
+        self.kiloarcListenerTask = done_task
+        self.config = None
 
         asyncio.ensure_future(self.stateloop())
-        self.hardwareListenerTask = asyncio.ensure_future(self.hardwareListenerLoop())
+        self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
 
-    
-        
+    @staticmethod
+    def get_config_pkg():
+        return("ts_config_atcalsys")
 
-    async def begin_standby(self,id_data):
+    async def configure(self, config):
+        self.config = config
+
+    async def begin_standby(self, id_data):
         """ When we leave fault state to enter standby, we 
             need to make sure that the hardware isn't still
             reporting errors
         """
+        print("begin_standby()")
         # don't let the user leave fault state if the KiloArc
-        # is reporting an error
+        # or chiller is reporting an error
         if self.summary_state == salobj.State.FAULT:
             if self.model.component.checkStatus().redLED:
                 raise RuntimeError("Can't enter Standby state while KiloArc still reporting errors")
-        self.hardwareListenerTask = asyncio.ensure_future(self.hardwareListenerLoop())
-
+        if self.summary_state == salobj.State.DISABLED:
+            self.telemetryLoop.cancel()
+            self.kiloarcListenerTask.cancel()
+            await self.chillerModel.disconnect()
+        
 
     async def begin_enable(self, id_data):
         """ Upon entering ENABLE state, we need to start 
             the telemetry and hardware listener loops.
         """
         print("begin_enable()")
-        self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
+        
 
     async def begin_start(self, id_data):
         """ Executes during the STANDBY --> DISABLED state
-            transition. Confusing name, IMO. 
+            transition. Confusing name, IMHO. 
         """
         print("begin_start()")
-        self.telemetryLoopTask.cancel()
+        self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
+        self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
+        await self.chillerModel.connect()
 
     async def begin_disable(self, id_data):
         print("begin_disable()")
-        self.telemetryLoopTask.cancel()
 
     async def implement_simulation_mode(self, sim_mode):
         """ Swaps between real and simulated component upon request.
         """
         print("sim mode " + str(sim_mode))
-        if sim_mode == 0: 
+        if sim_mode == 0:
             self.model.component = self.model.realComponent
-        else: self.model.component = self.model.simComponent
+        else:
+            self.model.component = self.model.simComponent
 
     async def do_powerLightOn(self, id_data):
         """ Powers the light on. It will go to 1200 watts, then drop
@@ -156,9 +172,9 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
                 -------
                 None
         """
-        pass
+        self.chillerModel.setControlTemp(id_data.data.setChillerTemperature)
 
-    async def do_powerChillerOn(self,id_data):
+    async def do_startCooling(self,id_data):
         """ Powers chiller on
 
                 Parameters
@@ -171,7 +187,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             """
         pass
 
-    async def do_powerChillerOff(self,id_data):
+    async def do_stopCooling(self,id_data):
         """ powers chiller off. Not available when bulb is on. 
 
                 Parameters
@@ -190,13 +206,13 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
         """
         while True:
             print("current state:  "+str(self.summary_state))
-            print("detailed state: "+str(self.detailed_state))
-           # print(self.hardwareListenerTask)
+           # print("detailed state: "+str(self.detailed_state))
+           # print(self.kiloarcListenerTask)
            # print(self.telemetryLoopTask)
             await asyncio.sleep(1)
 
 
-    async def hardwareListenerLoop(self):
+    async def kiloarcListenerLoop(self):
         """ Periodically checks with the component to see if the wattage
             and/or the hardware's "status light" has changed. If so, we
             publish an event to SAL. Unlike the LEDs, the wattage isn't
@@ -211,7 +227,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             self.summary_state = salobj.State.FAULT
             self.detailed_state = WLSDetailedState.DISCONNECTED
             self.telemetryLoopTask.cancel()
-            self.hardwareListenerTask.cancel() #TODO do we really want to stop this one?
+            self.kiloarcListenerTask.cancel() #TODO do we really want to stop this one?
         
         while True:
             #if we lose connection to the ADAM, stop loops and go to FAULT state
@@ -222,7 +238,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
                     self.evt_whiteLightStatus.set_put(
                         wattageChange = float(currentState.wattage),
                         coolingDown = currentState.blueLED,
-                        acceptingCommands = currentState.greenLED,
+                        acceptingCommands = currentState.quitLED,
                         error = currentState.redLED,
                     )
                 # update detailed state
@@ -239,7 +255,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
                 self.summary_state = salobj.State.FAULT
                 self.detailed_state = WLSDetailedState.DISCONNECTED
                 self.telemetryLoopTask.cancel()
-                self.hardwareListenerTask.cancel()
+                self.kiloarcListenerTask.cancel()
             
 
             #if the KiloArc error light is on, put the CSC into FAULT state   
@@ -270,7 +286,7 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             None
         """
         while True:
-            #KILOARC
+            # Kiloarc
 
             # calculate uptime and wattage since the last iteration of this loop
             lastIntervalUptime = time.time()/3600 - self.model.component.bulbHoursLastUpdate
@@ -285,9 +301,16 @@ class WhiteLightSourceCSC(salobj.BaseCsc):
             self.model.component.bulbHoursLastUpdate = time.time()/3600
 
             # publish telemetry
-            self.tel_bulbHours.set_put(bulbHours = float(self.model.component.bulbHours))
-            self.tel_bulbWattHours.set_put(bulbHours = float(self.model.component.bulbWattHours))
+            self.tel_bulbhour.set_put(bulbHours=float(self.model.component.bulbHours))
+            self.tel_bulbWatthour.set_put(bulbHours=float(self.model.component.bulbWattHours))
 
+            # Chiller
+
+            self.tel_chillerFanSpeed.set(fan1Speed=int(self.chillerModel.fan1speed))
+            self.tel_chillerFanSpeed.set(fan2Speed=int(self.chillerModel.fan2speed))
+            self.tel_chillerFanSpeed.set(fan3Speed=int(self.chillerModel.fan3speed))
+            self.tel_chillerFanSpeed.set(fan4Speed=int(self.chillerModel.fan4speed))
+            self.tel_chillerFanSpeed.put()
 
 
 

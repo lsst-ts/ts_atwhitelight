@@ -1,0 +1,23 @@
+$schema: http://json-schema.org/draft-07/schema#
+$id: https://github.com/lsst-ts/ts_ATWhiteLightSource/blob/master/schema/whitelight.yaml
+# title must end with one or more spaces followed by the schema version, which must begin with "v"
+title: Whitelight v1
+description: Schema for AT White Light Source configuration files
+type: object
+properties:
+  chiller_ip:
+    description: IP address of chiller.
+    type: string
+    default: "140.252.33.70"
+  chiller_port:
+    description: port of chiller.
+    type: number
+    default: 4001
+  adam_ip:
+    description: IP of the kiloarc's ADAM controller.
+    type: string
+    default: "140.252.33.138"
+  adam_port:
+    description: port of the kiloarc's ADAM controller.
+    type: number
+    default: 50000

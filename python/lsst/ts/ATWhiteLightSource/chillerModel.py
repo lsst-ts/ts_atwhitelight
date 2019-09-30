@@ -96,7 +96,7 @@ class Alarms():
                    "Current Sensor 2 Open Alarm", "Current Sensor 2 Short Alarm")
         self.C6 = ("Rear Left Fan Noise Alarm", "Rear Right Fan Noise Alarm",
                    "Front Left Fan Noise Alarm", "Front Right Fan Noise Alarm")
-        self.C6 = ("Rear Left Fan Open Alarm", "Rear Right Fan Open Alarm",
+        self.C7 = ("Rear Left Fan Open Alarm", "Rear Right Fan Open Alarm",
                    "Front Left Fan Open Alarm", "Front Right Fan Open Alarm")
 
         self.W0 = ("Low Process Flow Warning", "Process Fluid Level Warning",
@@ -172,10 +172,10 @@ class ChillerModel():
         self.teDriveMode = None
         self.alarmPresent = False
         self.warningPresent = False
-        self.fan1speed = None
-        self.fan2speed = None
-        self.fan3speed = None
-        self.fan4speed = None
+        self.fan1speed = 0
+        self.fan2speed = 0
+        self.fan3speed = 0
+        self.fan4speed = 0
         self.chillerUptime = None
 
     def __str__(self):
@@ -214,6 +214,10 @@ class ChillerModel():
         self.queue_task.cancel()
         self.watchdog_task.cancel()
         await self.component.disconnect()
+
+    async def setControlTemp(self, temp):
+        msg = self.cpe.setControlTemp(temp)
+        await self.component.send_command(msg)
 
     
     def responder(self, msg):
