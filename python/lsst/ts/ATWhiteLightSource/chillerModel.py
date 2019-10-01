@@ -177,6 +177,8 @@ class ChillerModel():
         self.fan3speed = 0
         self.fan4speed = 0
         self.chillerUptime = None
+        self.current_warnings = []
+        self.current_alarms = []
 
     def __str__(self):
         output = "Control Status: " + str(self.controlStatus) \
@@ -218,6 +220,15 @@ class ChillerModel():
     async def setControlTemp(self, temp):
         msg = self.cpe.setControlTemp(temp)
         await self.component.send_command(msg)
+
+    
+    async def startChillin(self):
+        msg = self.cpe.setChillerStatus(1)
+        self.q.put((0,msg))
+
+    async def stopChillin(self):
+        msg = self.cpe.setChillerStatus(0)
+        self.q.put((0,msg))
 
     
     def responder(self, msg):
@@ -355,7 +366,8 @@ class ChillerModel():
                 if mask[j]:
                     alarmList.append(self.alarms.L1Alarms[i][j])
 
-        print(alarmList)
+        for a in alarmList:
+            self.current_alarms.append(a)
  
     def readAlarmStateL2_decode(self, msg):
         print(msg)
@@ -370,7 +382,8 @@ class ChillerModel():
                     elif msg[0] == "2":
                         alarmList.append(self.alarms.L2AlarmsPt2[i+1][j])
 
-        print(alarmList)
+        for a in alarmList:
+            self.current_alarms.append(a)
 
     def readWarningState_decode(self, msg):
         warningList = []
@@ -381,7 +394,8 @@ class ChillerModel():
                 if mask[j]:
                     warningList.append(self.alarms.Warnings[i][j])
 
-        print(warningList)
+        for w in warningList:
+            self.current_warnings.append(w)
         
 
     def setWarning_decode(self, msg):

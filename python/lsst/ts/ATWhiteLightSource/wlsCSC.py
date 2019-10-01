@@ -172,7 +172,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 -------
                 None
         """
-        self.chillerModel.setControlTemp(id_data.data.setChillerTemperature)
+        await self.chillerModel.setControlTemp(id_data.data.setChillerTemperature)
 
     async def do_startCooling(self,id_data):
         """ Powers chiller on
@@ -185,7 +185,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 -------
                 None
             """
-        pass
+        self.assert_enabled("startCooling")
+        await self.chillerModel.startChillin()
 
     async def do_stopCooling(self,id_data):
         """ powers chiller off. Not available when bulb is on. 
@@ -198,7 +199,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 -------
                 None
             """
-        pass
+        await self.chillerModel.stopChillin()
 
     async def stateloop(self):
         """
@@ -238,7 +239,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     self.evt_whiteLightStatus.set_put(
                         wattageChange = float(currentState.wattage),
                         coolingDown = currentState.blueLED,
-                        acceptingCommands = currentState.quitLED,
+                        acceptingCommands = currentState.greenLED,
                         error = currentState.redLED,
                     )
                 # update detailed state
