@@ -7,6 +7,7 @@ import pathlib
 import asyncio
 import time
 import enum
+import logging
 from pymodbus.exceptions import ConnectionException
 
 
@@ -77,6 +78,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.telemetryLoopTask = done_task
         self.kiloarcListenerTask = done_task
         self.config = None
+        self.cmd_lock = asyncio.Lock()
 
         asyncio.ensure_future(self.stateloop())
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
@@ -139,6 +141,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             cooling down.
         """
         self.assert_enabled("powerLightOn")
+        #first make sure the chiller is running
         await self.model.powerLightOn()
 
     async def do_powerLightOff(self, id_data):
@@ -212,6 +215,28 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
            # print(self.telemetryLoopTask)
             await asyncio.sleep(1)
 
+    async def reconnect_kiloarc_or_fault(self, max_attempts=5):
+        async with self.cmd_lock:
+            print("Attempting reconnect to kiloarc")
+            num_attempts = 1
+            while num_attempts < max_attempts:
+                print("iteration "+ str(num_attempts))
+                try:
+                    print("trying reconnect...")
+                    self.model.component.reconnect()
+                    self.model.component.checkStatus() #this triggers the ConnectionException we're fishing for.
+                    print("it worked")
+                    break
+                except ConnectionException:
+                    print("kiloarc connection problem, attempting reconnect " + str(num_attempts))
+                    if num_attempts == max_attempts:
+                        print("going FAULT")
+                        self.summary_state = salobj.State.FAULT
+                        self.detailed_state = WLSDetailedState.DISCONNECTED
+                        self.telemetryLoopTask.cancel()
+                        self.kiloarcListenerTask.cancel() #TODO do we really want to stop this one?
+                    num_attempts += 1 
+                await asyncio.sleep(1.5)
 
     async def kiloarcListenerLoop(self):
         """ Periodically checks with the component to see if the wattage
@@ -223,17 +248,16 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         # if we can't connect to the ADAM, stop loops and go to FAULT state
         # and DISCONNECTED detailed state.
         try:
-            previousState = self.model.component.checkStatus()
+            async with self.cmd_lock:
+                previousState = self.model.component.checkStatus()
         except ConnectionException:
-            self.summary_state = salobj.State.FAULT
-            self.detailed_state = WLSDetailedState.DISCONNECTED
-            self.telemetryLoopTask.cancel()
-            self.kiloarcListenerTask.cancel() #TODO do we really want to stop this one?
+            await self.reconnect_kiloarc_or_fault()
         
         while True:
             #if we lose connection to the ADAM, stop loops and go to FAULT state
             try:
-                currentState = self.model.component.checkStatus()
+                async with self.cmd_lock:
+                    currentState = self.model.component.checkStatus()
                 if currentState != previousState:
                     print("Voltage change detected! \n" + str(currentState))
                     self.evt_whiteLightStatus.set_put(
@@ -253,10 +277,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     self.detailed_state = WLSDetailedState.OFFLINE
                 previousState = currentState
             except ConnectionException:
-                self.summary_state = salobj.State.FAULT
-                self.detailed_state = WLSDetailedState.DISCONNECTED
-                self.telemetryLoopTask.cancel()
-                self.kiloarcListenerTask.cancel()
+                await self.reconnect_kiloarc_or_fault()
             
 
             #if the KiloArc error light is on, put the CSC into FAULT state   
@@ -266,6 +287,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                         await self.model.emergencyPowerLightOff()
                 except salobj.ExpectedError as e:
                     print("Attempted emergency shutoff of light, but got error: "+ str(e))
+                print("kiloarc reporting error FAULT")
                 self.summary_state = salobj.State.FAULT
                 self.detailed_state = WLSDetailedState.ERROR
 

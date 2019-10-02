@@ -36,11 +36,21 @@ class WhiteLightSourceComponent():
 
     def __init__(self, ip='140.252.33.160', port=502):
         self.client = ModbusClient(ip, port)
+        self.clientip = ip
+        self.clientport = port
         self.bulbHours = 0  # Read this from EFD when we initialize
         self.bulbWattHours = 0  # This too
         self.bulbCount = 0  # how many bulbs have there been in total?
         self.bulbHoursLastUpdate = time.time()/3600
         self.bulbState = 0
+
+    
+    def reconnect(self):
+        """
+        resets the modbus tcp client
+        """
+        self.client = ModbusClient(self.clientip, self.clientport)
+        
 
     def setLightPower(self, watts):
         """ Sets the brightness (in watts) on the white light source.
