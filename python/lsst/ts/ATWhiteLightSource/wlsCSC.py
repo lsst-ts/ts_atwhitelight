@@ -7,7 +7,6 @@ import pathlib
 import asyncio
 import time
 import enum
-import logging
 from pymodbus.exceptions import ConnectionException
 
 
@@ -77,11 +76,11 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         done_task.set_result(None)
         self.telemetryLoopTask = done_task
         self.kiloarcListenerTask = done_task
+
         self.config = None
-        self.cmd_lock = asyncio.Lock()
+        self.kiloarc_com_lock = asyncio.Lock()
 
         asyncio.ensure_future(self.stateloop())
-        self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
 
     @staticmethod
     def get_config_pkg():
@@ -132,8 +131,10 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         print("sim mode " + str(sim_mode))
         if sim_mode == 0:
             self.model.component = self.model.realComponent
+            self.chillerModel.component = self.chillerModel.realComponent
         else:
             self.model.component = self.model.simComponent
+            self.chillerModel.component = self.chillerModel.fakeComponent
 
     async def do_powerLightOn(self, id_data):
         """ Powers the light on. It will go to 1200 watts, then drop
@@ -141,7 +142,11 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             cooling down.
         """
         self.assert_enabled("powerLightOn")
-        #first make sure the chiller is running
+        #first make sure the chiller is running, and not reporting any alarms
+        if self.chillerModel.chillerStatus != 1:
+            raise salobj.ExpectedError("Can't power light on unless chiller is running.")
+        if self.chillerModel.alarmPresent == 1:  # TODO make this pass along the specific alarm
+            raise salobj.ExpectedError("Can't power light on while chiller is reporting an Alarm")
         await self.model.powerLightOn()
 
     async def do_powerLightOff(self, id_data):
@@ -216,7 +221,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             await asyncio.sleep(1)
 
     async def reconnect_kiloarc_or_fault(self, max_attempts=5):
-        async with self.cmd_lock:
+        async with self.kiloarc_com_lock:
             print("Attempting reconnect to kiloarc")
             num_attempts = 1
             while num_attempts < max_attempts:
@@ -224,7 +229,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 try:
                     print("trying reconnect...")
                     self.model.component.reconnect()
-                    self.model.component.checkStatus() #this triggers the ConnectionException we're fishing for.
+                    self.model.component.checkStatus()  # this triggers the exception we're fishing for.
                     print("it worked")
                     break
                 except ConnectionException:
@@ -247,8 +252,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         # if we can't connect to the ADAM, stop loops and go to FAULT state
         # and DISCONNECTED detailed state.
+        previousState = None
         try:
-            async with self.cmd_lock:
+            async with self.kiloarc_com_lock:
                 previousState = self.model.component.checkStatus()
         except ConnectionException:
             await self.reconnect_kiloarc_or_fault()
@@ -256,7 +262,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         while True:
             #if we lose connection to the ADAM, stop loops and go to FAULT state
             try:
-                async with self.cmd_lock:
+                async with self.kiloarc_com_lock:
                     currentState = self.model.component.checkStatus()
                 if currentState != previousState:
                     print("Voltage change detected! \n" + str(currentState))
@@ -278,9 +284,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 previousState = currentState
             except ConnectionException:
                 await self.reconnect_kiloarc_or_fault()
-            
 
-            #if the KiloArc error light is on, put the CSC into FAULT state   
+            # if the KiloArc error light is on, put the CSC into FAULT state
             if currentState.redLED:
                 try:
                     if self.model.bulb_on:
@@ -324,16 +329,16 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.model.component.bulbHoursLastUpdate = time.time()/3600
 
             # publish telemetry
-            self.tel_bulbhour.set_put(bulbHours=float(self.model.component.bulbHours))
-            self.tel_bulbWatthour.set_put(bulbHours=float(self.model.component.bulbWattHours))
+            self.tel_bulbhour.set_put(bulbhour=float(self.model.component.bulbHours))
+            self.tel_bulbWatthour.set_put(bulbhour=float(self.model.component.bulbWattHours))
 
             # Chiller
 
-            self.tel_chillerFanSpeed.set(fan1Speed=int(self.chillerModel.fan1speed))
-            self.tel_chillerFanSpeed.set(fan2Speed=int(self.chillerModel.fan2speed))
-            self.tel_chillerFanSpeed.set(fan3Speed=int(self.chillerModel.fan3speed))
-            self.tel_chillerFanSpeed.set(fan4Speed=int(self.chillerModel.fan4speed))
-            self.tel_chillerFanSpeed.put()
+            self.tel_chillerFansSpeed.set(fan1Speed=int(self.chillerModel.fan1speed))
+            self.tel_chillerFansSpeed.set(fan2Speed=int(self.chillerModel.fan2speed))
+            self.tel_chillerFansSpeed.set(fan3Speed=int(self.chillerModel.fan3speed))
+            self.tel_chillerFansSpeed.set(fan4Speed=int(self.chillerModel.fan4speed))
+            self.tel_chillerFansSpeed.put()
 
 
 

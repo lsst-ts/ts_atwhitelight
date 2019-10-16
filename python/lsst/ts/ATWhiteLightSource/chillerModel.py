@@ -3,6 +3,7 @@ from queue import PriorityQueue
 from enum import IntEnum
 import binascii
 from chillerComponent import ChillerComponent
+from fakeChillerComponent import FakeChillerComponent
 from chillerEncoder import ChillerPacketEncoder
 
 
@@ -154,7 +155,9 @@ class ChillerModel():
         }
 
         self.q = PriorityQueue()
-        self.component = ChillerComponent()
+        self.component = None
+        self.realComponent = ChillerComponent()
+        self.fakeComponent = FakeChillerComponent()
         self.cpe = ChillerPacketEncoder()
 
         #chiller state
@@ -205,6 +208,7 @@ class ChillerModel():
         """
         connect to the chiller and start the background tasks that keep the model up-to-date
         """
+        print(type(self.component))
         await self.component.connect()
         self.queue_task = asyncio.ensure_future(self.queueloop())
         self.watchdog_task = asyncio.ensure_future(self.watchdogloop())
@@ -224,11 +228,11 @@ class ChillerModel():
     
     async def startChillin(self):
         msg = self.cpe.setChillerStatus(1)
-        self.q.put((0,msg))
+        self.q.put((0, msg))
 
     async def stopChillin(self):
         msg = self.cpe.setChillerStatus(0)
-        self.q.put((0,msg))
+        self.q.put((0, msg))
 
     
     def responder(self, msg):
@@ -257,13 +261,11 @@ class ChillerModel():
         data = msg[14:]
         response_method = self.response_dict[cmd_id]
 
-        print("cmd_id: " + str(cmd_id))
-        print("error: " + str(error))
-        print("data: " + str(data))
-        print("checksum: " + str(checksum_from_chiller))
-        print("response method: " + str(response_method))
+        print("cmd_id: " + str(cmd_id) + "; error: " + str(error) + "; data: " + str(data) + "; checksum: "
+              + str(checksum_from_chiller) + "; response method: " + str(response_method.__name__))
 
-        if int(cmd_id) in (50,51,52,53):
+        # special case for fans: msg[13] is the fan number. 
+        if int(cmd_id) in (50, 51, 52, 53):
             response_method(int(msg[13]), data)
         else:
             response_method(data)
@@ -420,8 +422,11 @@ class ChillerModel():
 
     async def queueloop(self):
         """
-        Every 10 seconds, checks to see if the queue is empty and if so, puts all the telemetry in queries in it. 
-        Telemetry is lower priority so commands will always jump to the front of the queue. 
+        queue for sending commands to chiller. Telemetry is the lowest priority, and only gets added to the queue
+        when it's empty. Watchdog commands, which report basic status, warnings, and alarms) are higher priority. 
+        commands from SAL are the highest priority and always jump to the front of the queue. Chiller docs say
+        it can only accept 1 TCP message per second, which is clearly not the case, but we're sticking to their 
+        specs anyway...
         """
         print("Starting queue loop")
         while True:

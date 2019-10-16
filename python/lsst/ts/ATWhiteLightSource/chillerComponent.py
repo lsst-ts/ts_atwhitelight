@@ -11,6 +11,7 @@ class ChillerComponent(object):
         self.reader = None
         self.writer = None
         self.timeout = 5
+        self.response_dict = {}
 
     async def connect(self):
         """Connect to chiller's ethernet-to-serial bridge"""
@@ -45,6 +46,8 @@ class ChillerComponent(object):
 
         self.writer.write(cmd)
         response = await self.reader.readuntil(separator=b'\r')
+        # TODO remove this eventually, it's just used to harvest data for chiller's simulation mode
+        self.response_dict[cmd] = response
         return(response)
 
 
