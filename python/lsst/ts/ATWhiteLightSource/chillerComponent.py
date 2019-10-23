@@ -39,15 +39,17 @@ class ChillerComponent(object):
 
     async def send_command(self, cmd):
         """
-        cmd is the ascii string of the command
-        expResponse is a substring of the expected response
-        that we will attempt to match against the actual response
+        send a message to the chiller and return the response
         """
 
         self.writer.write(cmd)
+
+        # response = asynico.wait_for(self.reader.readuntil(separator=b'\r'), timeout = 5)
         response = await self.reader.readuntil(separator=b'\r')
+
         # TODO remove this eventually, it's just used to harvest data for chiller's simulation mode
         self.response_dict[cmd] = response
+        
         return(response)
 
 

@@ -291,10 +291,15 @@ class ChillerModel():
 
         if self.warningPresent:
             self.q.put((0, self.cpe.readWarningState()))
-
-
-
-            
+    
+    
+    async def priority_watchdog(self):
+        """
+        sends a high priority watchdog, which will make sure the chiller state
+        is up to date before we do something like turning on the kiloarc.
+        We want to know if there are alarms present before we do that.
+        """
+        self.q.put((0, self.cpe.watchdog()))
 
     def tempParser(self, msg):
         """
@@ -454,13 +459,13 @@ class ChillerModel():
 
     async def watchdogloop(self):
         """
-        Every 5 seconds, throw a watchdog on the queue. This is the one that will let us know if there
-        are any warnings or alerts, so we check it more frequently.
+        Every 7 seconds, throw a watchdog on the queue. This is the one that will let us know if there
+        are any warnings or alerts, so we check it more frequently than other telemetry.
         """
 
         while True:
             self.q.put((1, self.cpe.watchdog()))
-            await asyncio.sleep(5)
+            await asyncio.sleep(7)
 
             
 
