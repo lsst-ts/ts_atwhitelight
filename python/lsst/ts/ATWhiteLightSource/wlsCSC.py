@@ -121,7 +121,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         print("begin_start()")
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
-        await self.chillerModel.connect()
+        await asyncio.wait_for(self.chillerModel.connect(), timeout=5)
 
     async def begin_disable(self, id_data):
         print("begin_disable()")
