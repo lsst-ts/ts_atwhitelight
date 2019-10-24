@@ -18,11 +18,11 @@ class ChillerComponent(object):
         #self.log.debug(f"connecting to: {self.ip}:{self.port}.")
         if self.connected:
             raise RuntimeError("Already connected")
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((self.ip, self.port))
-        self.connect_task = asyncio.open_connection(sock=s)
+        self.connect_task = asyncio.open_connection(self.ip, self.port)
+        print("about to connect to "+str(self.ip))
         self.reader, self.writer = await asyncio.wait_for(self.connect_task, self.timeout)
-
+        print("done connecting")
+        print(self.connect_task)
     async def disconnect(self):
         try:
             self.reply_handler_loop.cancel()
@@ -44,12 +44,12 @@ class ChillerComponent(object):
 
         self.writer.write(cmd)
 
-        # response = asynico.wait_for(self.reader.readuntil(separator=b'\r'), timeout = 5)
-        response = await self.reader.readuntil(separator=b'\r')
+        response = await asyncio.wait_for(self.reader.readuntil(separator=b'\r'), timeout=self.timeout)
 
         # TODO remove this eventually, it's just used to harvest data for chiller's simulation mode
         self.response_dict[cmd] = response
-        
+        print("response")
+        print(response)
         return(response)
 
 
