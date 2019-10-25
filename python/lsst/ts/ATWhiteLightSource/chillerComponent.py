@@ -12,6 +12,8 @@ class ChillerComponent(object):
         self.writer = None
         self.timeout = 5
         self.response_dict = {}
+        self.last_response = None
+        self.chiller_com_lock = asyncio.Lock
 
     async def connect(self):
         """Connect to chiller's ethernet-to-serial bridge"""
@@ -22,15 +24,16 @@ class ChillerComponent(object):
         print("about to connect to "+str(self.ip))
         self.reader, self.writer = await asyncio.wait_for(self.connect_task, self.timeout)
         print("done connecting")
-        print(self.connect_task)
+
     async def disconnect(self):
-        try:
-            self.reply_handler_loop.cancel()
-            await self.reply_handler_loop
-        except asyncio.CancelledError:
-            self.log.info("reply handler task cancelled")
-        except Exception as e:
-            self.log.exception(e)
+        #try:
+        #    self.reply_handler_loop.cancel()
+        #    await self.reply_handler_loop
+        #except asyncio.CancelledError:
+        #    self.log.info("reply handler task cancelled")
+        #except Exception as e:
+        #    print(e)
+        #    self.log.exception(e)
         
         self.writer.close()
         
@@ -41,16 +44,30 @@ class ChillerComponent(object):
         """
         send a message to the chiller and return the response
         """
-
+        
         self.writer.write(cmd)
-
-        response = await asyncio.wait_for(self.reader.readuntil(separator=b'\r'), timeout=self.timeout)
-
+        
+        response = await asyncio.wait_for(self.reader.readuntil(separator=b'\r'), timeout=5)
         # TODO remove this eventually, it's just used to harvest data for chiller's simulation mode
         self.response_dict[cmd] = response
-        print("response")
-        print(response)
         return(response)
+
+    async def reconnect_loop(self, max_attempts=4):
+        attempts = 0
+        while attempts < max_attempts:
+            print("reconnect attempt " + str(attempts))
+            print(self.connected)
+            if self.connected:
+                print("SUCCESS??")
+                break
+            else:
+                try:
+                    await self.connect()
+                    print("\tconnected!")
+                except asyncio.TimeoutError:
+                    print("TIMED OUT")
+            attempts += 1 
+        print("COULDNT RECON")
 
 
     @property
