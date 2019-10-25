@@ -451,7 +451,15 @@ class ChillerModel():
                 self.q.put((2, self.cpe.readUptime()))
 
             pop = self.q.get()
-            resp = await self.component.send_command(pop[1])
+            try:
+                resp = await self.component.send_command(pop[1])
+            except asyncio.TimeoutError:
+                print("Timeout Happened")
+                await self.component.disconnect()
+                await self.component.reconnect_loop()
+                if self.component.connected:
+                    print("we're reconnected (model)")
+
 
             #all actions taken in response to messages from the chiller are handled by responder
             self.responder(resp)
