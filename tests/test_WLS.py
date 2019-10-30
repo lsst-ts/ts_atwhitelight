@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-import SALPY_ATWhiteLight
+
 from lsst.ts import salobj
 from lsst.ts.salobj import test_utils
 from lsst.ts.ATWhiteLightSource.wlsCSC import WhiteLightSourceCSC
@@ -10,15 +10,15 @@ from collections import namedtuple
 
 class WhiteLightSourceCSCTests(unittest.TestCase):
     def setUp(self):
-        self.csc = WhiteLightSourceCSC(sim_mode=1)
+        self.csc = WhiteLightSourceCSC(initial_simulation_mode=0)
         self.csc.summary_state = salobj.State.ENABLED
         
 
         # set short cooldown and warmup periods so the tests don't take hours
-        self.csc.model.cooldownPeriod = 3
-        self.csc.model.warmupPeriod = 3
+        self.csc.kiloarcModel.cooldownPeriod = 3
+        self.csc.kiloarcModel.warmupPeriod = 3
 
-        self.remote = salobj.Remote(SALPY_ATWhiteLight, index=None)
+        self.remote = salobj.Remote(domain=self.csc.domain, name="ATWhiteLight", index=0)
 
 
     def slp(self, watts):
@@ -41,12 +41,12 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         test_utils.set_random_lsst_dds_domain()
 
         async def doit():
-            self.assertEqual(self.csc.model.component.bulbState, 0)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 0)
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await asyncio.sleep(0.3)
-            self.assertEqual(self.csc.model.component.bulbState, 1200)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 1200)
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 800)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 800)
         asyncio.get_event_loop().run_until_complete(doit())
 
     def testPowerOff(self):
@@ -56,14 +56,14 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         test_utils.set_random_lsst_dds_domain()
 
         async def doit():
-            self.assertEqual(self.csc.model.component.bulbState, 0)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 0)
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 800)
-            await self.csc.model.warmup_task
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 800)
+            await self.csc.kiloarcModel.warmup_task
             task = asyncio.ensure_future(self.csc.do_powerLightOff(None))
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 0)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 0)
         asyncio.get_event_loop().run_until_complete(doit())
 
     def testSetPower(self):
@@ -75,12 +75,12 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 800)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 800)
 
             # set to 950 watts
             task = asyncio.ensure_future(self.csc.do_setLightPower(self.slp(950)))
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 950)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 950)
 
         asyncio.get_event_loop().run_until_complete(doit())
 
@@ -93,13 +93,13 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 800)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 800)
 
             # any setting below 800 should result in 0 watts
-            await self.csc.model.warmup_task
+            await self.csc.kiloarcModel.warmup_task
             task = asyncio.ensure_future(self.csc.do_setLightPower(self.slp(799)))
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 0)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 0)
         asyncio.get_event_loop().run_until_complete(doit())
 
     def testSetPowerTooHigh(self):
@@ -125,8 +125,8 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 800)
-            await self.csc.model.warmup_task
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 800)
+            await self.csc.kiloarcModel.warmup_task
             offtask = asyncio.ensure_future(self.csc.do_powerLightOff(None))
             await asyncio.sleep(0.5)
             ontask = asyncio.ensure_future(self.csc.do_setLightPower(self.slp(999)))
@@ -146,18 +146,18 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 800)
-            await self.csc.model.warmup_task
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 800)
+            await self.csc.kiloarcModel.warmup_task
             offtask = asyncio.ensure_future(self.csc.do_powerLightOff(None))
             await asyncio.sleep(0.5)
             ontask = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             with self.assertRaises(salobj.ExpectedError):
                 await ontask
             await offtask
-            await self.csc.model.cooldown_task
+            await self.csc.kiloarcModel.cooldown_task
             ontask2 = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await ontask2
-            self.assertEqual(self.csc.model.component.bulbState, 800)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 800)
         asyncio.get_event_loop().run_until_complete(doit())
 
     def testCantPowerOffDuringWarmupPeriod(self):
@@ -169,14 +169,14 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         test_utils.set_random_lsst_dds_domain()
 
         async def doit():
-            self.assertEqual(self.csc.model.component.bulbState, 0)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 0)
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 800)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 800)
             task = asyncio.ensure_future(self.csc.do_powerLightOff(None))
             with self.assertRaises(salobj.ExpectedError):
                 await task
-            self.assertEqual(self.csc.model.component.bulbState, 800)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 800)
         asyncio.get_event_loop().run_until_complete(doit())
 
     def testEmergencyPowerLightOff(self):
@@ -187,13 +187,13 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         test_utils.set_random_lsst_dds_domain()
 
         async def doit():
-            self.assertEqual(self.csc.model.component.bulbState, 0)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 0)
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 800)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 800)
             task = asyncio.ensure_future(self.csc.do_emergencyPowerLightOff(None))
             await task
-            self.assertEqual(self.csc.model.component.bulbState, 0)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 0)
         asyncio.get_event_loop().run_until_complete(doit())
 
     def testCantPowerOffWhileOff(self):
@@ -206,7 +206,7 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
-            await self.csc.model.warmup_task
+            await self.csc.kiloarcModel.warmup_task
             task = asyncio.ensure_future(self.csc.do_powerLightOff(None))
             await task
             task = asyncio.ensure_future(self.csc.do_powerLightOff(None))
@@ -225,7 +225,7 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         async def doit():
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await task
-            await self.csc.model.warmup_task
+            await self.csc.kiloarcModel.warmup_task
             task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             with self.assertRaises(salobj.ExpectedError):
                 await task
@@ -243,13 +243,13 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
         async def doit():
             ontask = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await asyncio.sleep(0.3)
-            self.assertEqual(self.csc.model.component.bulbState, 1200)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 1200)
             changetask = asyncio.ensure_future(self.csc.do_setLightPower(self.slp(1105)))
             await asyncio.sleep(0.3)
-            self.assertEqual(self.csc.model.component.bulbState, 1200)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 1200)
             await ontask
             await changetask
-            self.assertEqual(self.csc.model.component.bulbState, 1105)
+            self.assertEqual(self.csc.kiloarcModel.component.bulbState, 1105)
         asyncio.get_event_loop().run_until_complete(doit())
 
 

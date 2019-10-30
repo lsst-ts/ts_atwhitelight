@@ -2,9 +2,9 @@ import asyncio
 from queue import PriorityQueue
 from enum import IntEnum
 import binascii
-from chillerComponent import ChillerComponent
-from fakeChillerComponent import FakeChillerComponent
-from chillerEncoder import ChillerPacketEncoder
+from .chillerComponent import ChillerComponent
+from .fakeChillerComponent import FakeChillerComponent
+from .chillerEncoder import ChillerPacketEncoder
 
 
 class ControlStatus(IntEnum):

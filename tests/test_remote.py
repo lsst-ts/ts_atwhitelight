@@ -2,7 +2,7 @@ import asyncio
 import unittest
 import time
 
-import SALPY_ATWhiteLight
+
 from lsst.ts import salobj
 from lsst.ts.salobj import test_utils
 from lsst.ts.ATWhiteLightSource.wlsCSC import WhiteLightSourceCSC
@@ -10,13 +10,13 @@ from lsst.ts.ATWhiteLightSource.wlsCSC import WhiteLightSourceCSC
 
 class WhiteLightSourceRemoteTests(unittest.TestCase):
     def setUp(self):
-        self.csc = WhiteLightSourceCSC(sim_mode = 1)
+        self.csc = WhiteLightSourceCSC(initial_simulation_mode = 0)
         self.csc.summary_state = salobj.State.ENABLED
 
         # set short cooldown and warmup periods so the tests don't take hours
-        self.csc.model.cooldownPeriod = 3
-        self.csc.model.warmupPeriod = 3
-        self.remote = salobj.Remote(SALPY_ATWhiteLight, index=None)
+        self.csc.kiloarcModel.cooldownPeriod = 3
+        self.csc.kiloarcModel.warmupPeriod = 3
+        self.remote = salobj.Remote(domain=self.csc.domain, name="ATWhiteLight", index=0)
 
     def testPowerOnOff(self):
         """

@@ -38,6 +38,7 @@ class FakeChillerComponent(object):
 
     async def send_command(self, cmd):
         if cmd in self.response_dict:
+            await asyncio.sleep(0.05)
             return self.response_dict[cmd]
         else:
             return(cmd)

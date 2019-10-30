@@ -1,8 +1,8 @@
 __all__ = ["WhiteLightSourceCSC"]
 
 from lsst.ts import salobj
-from wlsModel import WhiteLightSourceModel
-from chillerModel import ChillerModel
+from .wlsModel import WhiteLightSourceModel
+from .chillerModel import ChillerModel
 import pathlib
 import asyncio
 import time

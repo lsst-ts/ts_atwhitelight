@@ -3,8 +3,8 @@ __all__ = ["WhiteLightSourceModel"]
 import time
 import asyncio
 
-from wlsComponent import WhiteLightSourceComponent
-from wlsSimComponent import WhiteLightSourceComponentSimulator
+from .wlsComponent import WhiteLightSourceComponent
+from .wlsSimComponent import WhiteLightSourceComponentSimulator
 from lsst.ts import salobj
 
 
