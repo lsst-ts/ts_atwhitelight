@@ -13,7 +13,7 @@ class ChillerComponent(object):
         self.timeout = 5
         self.response_dict = {}
         self.last_response = None
-        self.chiller_com_lock = asyncio.Lock
+        self.chiller_com_lock = asyncio.Lock()
 
     async def connect(self):
         """Connect to chiller's ethernet-to-serial bridge"""
@@ -44,13 +44,15 @@ class ChillerComponent(object):
         """
         send a message to the chiller and return the response
         """
-        
-        self.writer.write(cmd)
-        
-        response = await asyncio.wait_for(self.reader.readuntil(separator=b'\r'), timeout=5)
-        # TODO remove this eventually, it's just used to harvest data for chiller's simulation mode
-        self.response_dict[cmd] = response
-        return(response)
+        if self.connected:
+            async with self.chiller_com_lock:
+                self.writer.write(cmd)
+                response = await asyncio.wait_for(self.reader.readuntil(separator=b'\r'), timeout=5)
+                # TODO remove this eventually, it's just used to harvest data for chiller's simulation mode
+                self.response_dict[cmd] = response
+                return(response)
+        else:
+            raise ConnectionError("not connected")
 
     async def reconnect_loop(self, max_attempts=4):
         attempts = 0

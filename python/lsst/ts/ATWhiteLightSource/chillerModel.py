@@ -223,7 +223,7 @@ class ChillerModel():
 
     async def setControlTemp(self, temp):
         msg = self.cpe.setControlTemp(temp)
-        await self.component.send_command(msg)
+        self.q.put((0,msg))
 
     
     async def startChillin(self):
@@ -362,7 +362,7 @@ class ChillerModel():
         self.chillerStatus = SS
 
     def setControlTemp_decode(self, msg):
-        pass
+        self.setTemp = self.tempParser(msg)
 
     def readAlarmStateL1_decode(self, msg):
         alarmList = []

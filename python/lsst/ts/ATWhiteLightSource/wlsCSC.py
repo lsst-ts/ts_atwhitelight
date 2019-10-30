@@ -122,6 +122,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
         await asyncio.wait_for(self.chillerModel.connect(), timeout=5)
+        print("done with start")
 
     async def begin_disable(self, id_data):
         print("begin_disable()")
@@ -182,7 +183,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 -------
                 None
         """
-        await self.chillerModel.setControlTemp(id_data.data.setChillerTemperature)
+        await self.chillerModel.setControlTemp(id_data.temperature)
+        
 
     async def do_startCooling(self,id_data):
         """ Powers chiller on
