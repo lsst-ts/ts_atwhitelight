@@ -42,10 +42,13 @@ class WhiteLightSourceCSCTests(unittest.TestCase):
 
         async def doit():
             self.assertEqual(self.csc.kiloarcModel.component.bulbState, 0)
-            task = asyncio.ensure_future(self.csc.do_powerLightOn(None))
+            print("*** about to start cooling")
+            await self.csc.do_startCooling(None)
+            print("Cooling started")
+            bulbtask = asyncio.ensure_future(self.csc.do_powerLightOn(None))
             await asyncio.sleep(0.3)
             self.assertEqual(self.csc.kiloarcModel.component.bulbState, 1200)
-            await task
+            await bulbtask
             self.assertEqual(self.csc.kiloarcModel.component.bulbState, 800)
         asyncio.get_event_loop().run_until_complete(doit())
 

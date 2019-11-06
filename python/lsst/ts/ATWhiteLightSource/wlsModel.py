@@ -155,3 +155,9 @@ class WhiteLightSourceModel():
             self.off_time = time.time()
         else:
             raise salobj.ExpectedError("Bulb is already off")
+
+    def disconnect(self):
+        try:
+            self.component.client.close()
+        except AttributeError:
+            pass

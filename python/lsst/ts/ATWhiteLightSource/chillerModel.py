@@ -155,10 +155,13 @@ class ChillerModel():
         }
 
         self.q = PriorityQueue()
+        self.disconnected = False 
         self.component = None
         self.realComponent = ChillerComponent()
         self.fakeComponent = FakeChillerComponent()
         self.cpe = ChillerPacketEncoder()
+        self.watchdogLoopBool = True
+        self.queueLoopBool = True
 
         #chiller state
         self.controlStatus = None
@@ -210,6 +213,7 @@ class ChillerModel():
         """
         print(type(self.component))
         await self.component.connect()
+        self.disconnected = False
         self.queue_task = asyncio.ensure_future(self.queueloop())
         self.watchdog_task = asyncio.ensure_future(self.watchdogloop())
 
@@ -217,15 +221,15 @@ class ChillerModel():
         """
         disconnect from chiller and halt loops
         """
-        self.queue_task.cancel()
-        self.watchdog_task.cancel()
+        self.watchdogLoopBool = False
+        self.queueLoopBool = False
         await self.component.disconnect()
+        self.disconnected = True
 
     async def setControlTemp(self, temp):
         msg = self.cpe.setControlTemp(temp)
-        self.q.put((0,msg))
+        self.q.put((0, msg))
 
-    
     async def startChillin(self):
         msg = self.cpe.setChillerStatus(1)
         self.q.put((0, msg))
@@ -434,7 +438,7 @@ class ChillerModel():
         specs anyway...
         """
         print("Starting queue loop")
-        while True:
+        while self.queueLoopBool:
             if self.q.empty():
                 self.q.put((2, self.cpe.readFanSpeed(1)))
                 self.q.put((2, self.cpe.readFanSpeed(2)))
@@ -459,6 +463,7 @@ class ChillerModel():
                 await self.component.reconnect_loop()
                 if self.component.connected:
                     print("we're reconnected (model)")
+                else: self.disconnected = True
 
 
             #all actions taken in response to messages from the chiller are handled by responder
@@ -471,7 +476,7 @@ class ChillerModel():
         are any warnings or alerts, so we check it more frequently than other telemetry.
         """
 
-        while True:
+        while self.watchdogLoopBool:
             self.q.put((1, self.cpe.watchdog()))
             await asyncio.sleep(7)
 

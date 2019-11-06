@@ -1,6 +1,7 @@
 import asyncio
 import socket
 import logging
+import time
 
 
 class ChillerComponent(object):
@@ -35,7 +36,10 @@ class ChillerComponent(object):
         #    print(e)
         #    self.log.exception(e)
         
-        self.writer.close()
+        try:
+            self.writer.close()
+        except AttributeError:
+            pass
         
         self.reader = None
         self.writer = None
@@ -54,9 +58,11 @@ class ChillerComponent(object):
         else:
             raise ConnectionError("not connected")
 
-    async def reconnect_loop(self, max_attempts=4):
-        attempts = 0
-        while attempts < max_attempts:
+    async def reconnect_loop(self, timelimit=120):
+
+        endTime = time.time() + timelimit
+
+        while time.time < endTime:
             print("reconnect attempt " + str(attempts))
             print(self.connected)
             if self.connected:
