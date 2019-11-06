@@ -16,7 +16,7 @@ class Harness:
         self.csc = ATWhiteLightSource.WhiteLightSourceCSC(
             config_dir=config_dir,
             initial_state=initial_state,
-            initial_simulation_mode=1)
+            initial_simulation_mode=0)
         self.remote = salobj.Remote(domain=self.csc.domain, name="ATWhiteLight", index=0)
     
     async def __aenter__(self):
@@ -132,6 +132,113 @@ class CscTestCase(asynctest.TestCase):
             await harness.csc.kiloarcModel.warmup_task
             await harness.remote.cmd_setLightPower.set_start(power=799, timeout=STD_TIMEOUT)
             await harness.csc.kiloarcModel.warmup_task
+            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 0)
+
+    async def testSetPowerTooHigh(self):
+        async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            harness.csc.kiloarcModel.warmupPeriod = 15
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=STD_TIMEOUT)
+            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
+            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(3) # Sleep while we wait for chiller to start chilling. 
+            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(5)
+            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
+            with salobj.assertRaisesAckError(result_contains="too high"):
+                await harness.remote.cmd_setLightPower.set_start(power=1201, timeout=STD_TIMEOUT)
+            await harness.csc.kiloarcModel.warmup_task
+    
+    async def testCantSetPowerWithBulbOff(self):
+        async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            harness.csc.kiloarcModel.warmupPeriod = 15
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=STD_TIMEOUT)
+            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
+            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(3) # Sleep while we wait for chiller to start chilling. 
+            with salobj.assertRaisesAckError(result_contains="You must turn the light on before setting light power."):
+                await harness.remote.cmd_setLightPower.set_start(power=1000, timeout=STD_TIMEOUT)
+
+    async def testCantPowerOnDuringCooldownPeriod(self):
+        async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            harness.csc.kiloarcModel.cooldownPeriod = 15
+            harness.csc.kiloarcModel.warmupPeriod = 15
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=STD_TIMEOUT)
+            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
+            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(3) # Sleep while we wait for chiller to start chilling. 
+            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(5)
+            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
+            await harness.csc.kiloarcModel.warmup_task
+            await harness.remote.cmd_powerLightOff.set_start(timeout=STD_TIMEOUT)
+            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 0)
+            with salobj.assertRaisesAckError(result_contains="Can't power on bulb during cool-off period."):
+                await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
+            await harness.csc.kiloarcModel.cooldown_task
+            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
+
+    async def testCantPowerOffDuringWarmupPeriod(self):
+        async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            harness.csc.kiloarcModel.cooldownPeriod = 15
+            harness.csc.kiloarcModel.warmupPeriod = 15
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=STD_TIMEOUT)
+            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
+            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(3) # Sleep while we wait for chiller to start chilling. 
+            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(5)
+            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
+            with salobj.assertRaisesAckError(result_contains="Can't power off bulb during warm-up period."):
+                await harness.remote.cmd_powerLightOff.set_start(timeout=STD_TIMEOUT)
+
+    async def testEmergencyPowerLightOff(self):
+        async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            harness.csc.kiloarcModel.cooldownPeriod = 15
+            harness.csc.kiloarcModel.warmupPeriod = 15
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=STD_TIMEOUT)
+            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
+            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(3) # Sleep while we wait for chiller to start chilling. 
+            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(5)
+            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
+            await harness.remote.cmd_emergencyPowerLightOff.set_start(timeout=STD_TIMEOUT)
+
+
+    async def testCantPowerOnBulbWithoutChiller(self):
+        async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            harness.csc.kiloarcModel.cooldownPeriod = 15
+            harness.csc.kiloarcModel.warmupPeriod = 15
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=STD_TIMEOUT)
+            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
+            with salobj.assertRaisesAckError(result_contains="Can't power light on unless chiller is running."):
+                await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
+
+    async def testCantStopChillingWithBulbOn(self):
+        async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            harness.csc.kiloarcModel.cooldownPeriod = 15
+            harness.csc.kiloarcModel.warmupPeriod = 15
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=STD_TIMEOUT)
+            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
+            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(3) # Sleep while we wait for chiller to start chilling. 
+            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(5)
+            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
+            with salobj.assertRaisesAckError(result_contains="Can't stop chillin' while the bulb is still on."):
+                await harness.remote.cmd_stopCooling.set_start(timeout=STD_TIMEOUT)
+
+    async def testBulbStopsWhenChillerDisconnected(self):
+        async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=STD_TIMEOUT)
+            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
+            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(3) # Sleep while we wait for chiller to start chilling. 
+            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
+            await asyncio.sleep(0.3) # Wait for light to start its 1200w startup burst. 
+            await asyncio.sleep(4)
+            await harness.csc.chillerModel.disconnect()
+            await asyncio.sleep(5)
             self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 0)
 
 
