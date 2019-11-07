@@ -223,6 +223,12 @@ class ChillerModel():
         """
         self.watchdogLoopBool = False
         self.queueLoopBool = False
+        await asyncio.sleep(1)
+        try:
+            self.queue_task.cancel()
+            self.watchdog_task.cancel()
+        except:
+            pass
         await self.component.disconnect()
         self.disconnected = True
 

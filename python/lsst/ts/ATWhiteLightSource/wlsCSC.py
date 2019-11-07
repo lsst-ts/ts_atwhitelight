@@ -238,7 +238,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         Make sure we stop the bulb if something bad happens with the chiller
         """
         while self.interlockLoopBool:
-            print("interlock loop running")
             if self.kiloarcModel.bulb_on:
                 if self.chillerModel.alarmPresent:
                     print("**Alarm Present")
@@ -258,27 +257,27 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     await self.kiloarcModel.emergencyPowerLightOff()
 
             await asyncio.sleep(1)
-        print("Interlock loop OVER")
+
 
 
     async def reconnect_kiloarc_or_fault(self, max_attempts=3):
         async with self.kiloarc_com_lock:
-            print("Attempting reconnect to kiloarc")
+            self.log.debug("Attempting reconnect to kiloarc")
             num_attempts = 0
             while num_attempts < max_attempts:
                 num_attempts += 1 
-                print("iteration "+ str(num_attempts))
+                self.log.debug("iteration "+ str(num_attempts))
                 try:
-                    print("trying reconnect...")
+                    self.log.debug("trying reconnect...")
                     self.kiloarcModel.component.reconnect()
                     self.kiloarcModel.component.checkStatus()  # this triggers the exception we're fishing for.
-                    print("it worked")
+                    self.log.debug("it worked")
                     break
                 except ConnectionException:
-                    print("kiloarc connection problem, attempting reconnect " + str(num_attempts))
-                    print(str(num_attempts) + " " + str(max_attempts))
+                    self.log.debug("kiloarc connection problem, attempting reconnect " + str(num_attempts))
+                    self.log.debug(str(num_attempts) + " " + str(max_attempts))
                     if num_attempts >= max_attempts:
-                        print("going FAULT")
+                        self.log.debug("going FAULT")
                         self.summary_state = salobj.State.FAULT
                         self.detailed_state = WLSDetailedState.DISCONNECTED
                         self.telemetryLoopTask.cancel()
@@ -338,8 +337,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 print("kiloarc reporting error FAULT")
                 self.summary_state = salobj.State.FAULT
                 self.detailed_state = WLSDetailedState.ERROR
-
-            print("HW Loop running")
             await asyncio.sleep(self.hardware_listener_interval)
         print("Kiloarc listener loop OVER")
 
