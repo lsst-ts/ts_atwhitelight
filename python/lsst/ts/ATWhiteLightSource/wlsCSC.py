@@ -80,13 +80,12 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.config = None
         self.kiloarc_com_lock = asyncio.Lock()
 
-        self.state_loop_task = asyncio.ensure_future(self.stateloop())
         self.kilo_interloc = asyncio.ensure_future(self.kiloarc_interlock_loop())
 
         self.interlockLoopBool = True
         self.telemetryLoopBool = True
         self.kiloarcListenerLoopBool = True
-        self.stateLoopBool = True
+
 
     @staticmethod
     def get_config_pkg():
@@ -221,17 +220,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             raise salobj.ExpectedError("Can't stop chillin' while the bulb is still on.")
         else:
             await self.chillerModel.stopChillin()
-
-    async def stateloop(self):
-        """
-        periodically prints the current state. For debug
-        """
-        while self.stateLoopBool:
-            print("current state:  "+str(self.summary_state))
-           # print("detailed state: "+str(self.detailed_state))
-           # print(self.kiloarcListenerTask)
-           # print(self.telemetryLoopTask)
-            await asyncio.sleep(1)
 
     async def kiloarc_interlock_loop(self):
         """
@@ -379,7 +367,41 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.tel_chillerFansSpeed.set(fan2Speed=int(self.chillerModel.fan2speed))
             self.tel_chillerFansSpeed.set(fan3Speed=int(self.chillerModel.fan3speed))
             self.tel_chillerFansSpeed.set(fan4Speed=int(self.chillerModel.fan4speed))
+            self.tel_chillerFansSpeed.set(timestamp=time.time())
             self.tel_chillerFansSpeed.put()
+
+            if self.chillerModel.chillerUptime is not None:
+                self.tel_chillerUpTime.set(upTime=self.chillerModel.chillerUptime)
+            self.tel_chillerUpTime.set(timestamp=time.time())
+            self.tel_chillerUpTime.put()
+            
+            if self.chillerModel.setTemp is not None:
+                self.tel_chillerTempSensors.set(setTemperature=self.chillerModel.setTemp)
+            if self.chillerModel.supplyTemp is not None:
+                self.tel_chillerTempSensors.set(supplyTemperature=self.chillerModel.supplyTemp)
+            if self.chillerModel.returnTemp is not None:
+                self.tel_chillerTempSensors.set(returnTemperature=self.chillerModel.returnTemp)
+            if self.chillerModel.ambientTemp is not None:
+                self.tel_chillerTempSensors.set(ambientTemperature=self.chillerModel.ambientTemp)
+            self.tel_chillerTempSensors.set(timestamp=time.time())
+            self.tel_chillerTempSensors.put()
+
+            if self.chillerModel.processFlow is not None:
+                self.tel_chillerProcessFlow.set(flow=self.chillerModel.processFlow)
+            self.tel_chillerProcessFlow.set(timestamp=time.time())
+            self.tel_chillerProcessFlow.put()
+            
+            if self.chillerModel.tecBank1 is not None:
+                self.tel_chillerTECBankCurrent.set(bank1Current=self.chillerModel.tecBank1)
+            if self.chillerModel.tecBank2 is not None:
+                self.tel_chillerTECBankCurrent.set(bank2Current=self.chillerModel.tecBank2)
+            self.tel_chillerTECBankCurrent.set(timestamp=time.time())
+            self.tel_chillerTECBankCurrent.put()
+
+            if self.chillerModel.teDrivePct is not None:
+                self.tel_chillerTEDriveLevel.set(chillerTEDriveLevel=self.chillerModel.teDrivePct)
+            self.tel_chillerTEDriveLevel.set(timestamp=time.time())
+            self.tel_chillerTEDriveLevel.put()            
 
             await asyncio.sleep(self.telemetry_publish_interval)
         print("Telemetry loop OVER")
@@ -390,10 +412,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.interlockLoopBool = False
         self.telemetryLoopBool = False
         self.kiloarcListenerLoopBool = False
-        self.stateLoopBool = False
         self.kiloarcModel.disconnect()
         await self.chillerModel.disconnect()
-        await self.state_loop_task
         await self.kilo_interloc
         await self.telemetryLoopTask
         await self.kiloarcListenerTask
