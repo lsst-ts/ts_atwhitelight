@@ -155,7 +155,7 @@ class ChillerModel():
         }
 
         self.q = PriorityQueue()
-        self.disconnected = False 
+        self.reconnect_failed = False 
         self.component = None
         self.realComponent = ChillerComponent()
         self.fakeComponent = FakeChillerComponent()
@@ -467,9 +467,8 @@ class ChillerModel():
                 print("Timeout Happened")
                 await self.component.disconnect()
                 await self.component.reconnect_loop()
-                if self.component.connected:
-                    print("we're reconnected (model)")
-                else: self.disconnected = True
+                if not self.component.connected:
+                    self.reconnect_failed = True
 
 
             #all actions taken in response to messages from the chiller are handled by responder

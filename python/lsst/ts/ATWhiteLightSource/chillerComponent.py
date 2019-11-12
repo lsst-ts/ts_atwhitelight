@@ -21,25 +21,13 @@ class ChillerComponent(object):
         #self.log.debug(f"connecting to: {self.ip}:{self.port}.")
         if self.connected:
             raise RuntimeError("Already connected")
-        self.connect_task = asyncio.open_connection(self.ip, self.port)
         print("about to connect to "+str(self.ip))
-        self.reader, self.writer = await asyncio.wait_for(self.connect_task, self.timeout)
+        self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.ip, self.port), self.timeout)
         print("done connecting")
 
-    async def disconnect(self):
-        #try:
-        #    self.reply_handler_loop.cancel()
-        #    await self.reply_handler_loop
-        #except asyncio.CancelledError:
-        #    self.log.info("reply handler task cancelled")
-        #except Exception as e:
-        #    print(e)
-        #    self.log.exception(e)
-        
-        try:
+    async def disconnect(self):   
+        if self.writer is not None:
             self.writer.close()
-        except AttributeError:
-            pass
         
         self.reader = None
         self.writer = None
