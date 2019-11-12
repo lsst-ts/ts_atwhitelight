@@ -21,3 +21,54 @@ properties:
     description: port of the kiloarc's ADAM controller.
     type: number
     default: 50000
+  chiller_reconnect_limit:
+    description: Number of seconds to attempt to reconnect to chiller before we give up and turn off the bulb
+    type: number
+    default: 120
+  adam_reconnect_limit:
+    description: Number of seconds to attempt to reconnect to ADAM/KiloArc before we give up and go to fault state
+    type: number
+    default: 30
+  telemetry_publish_interval:
+    description: Number of seconds between publishing telemetry
+    default: 10
+  chiller_high_supply_temp_warning:
+    description: DegC threshold for publishing a warning for high supply temp
+    type: number
+    default: 50
+  chiller_low_supply_temp_warning:
+    description: DegC threshold for publishing a warning for low supply temp
+    type: number
+    default: 5
+  chiller_high_ambient_temp_warning:
+    description: DegC threshold for publishing a warning for high ambient temp
+    type: number
+    default: 30
+  chiller_low_ambient_temp_warning:
+    description: DegC threshold for publishing a warning for low ambient temp
+    type: number
+    default: 5
+  chiller_low_process_flow_warning:
+    description: Liters per minute threshold for publishing a warning for low process flow
+    type: number
+    default: 0.5
+  chiller_high_supply_temp_alarm:
+    description: DegC threshold for going to fault state and shutting down the lamp due to high supply temp
+    type: number
+    default: 80
+  chiller_low_supply_temp_alarm:
+    description: DegC threshold for going to fault state and shutting down the lamp due to low supply temp
+    type: number
+    default: 2
+  chiller_high_ambient_temp_alarm:
+    description: DegC threshold for going to fault state and shutting down the lamp due to high ambient temp
+    type: number
+    default: 40
+  chiller_low_ambient_temp_alarm:
+    description: DegC threshold for going to fault state and shutting down the lamp due to low ambient temp
+    type: number
+    default: 2
+  chiller_low_process_flow_alarm:
+    description: Liters per minute threshold for going to fault state and shutting down the lamp due to low process flow
+    type: number
+    default: 0.3
