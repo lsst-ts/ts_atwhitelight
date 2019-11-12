@@ -127,6 +127,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
         await asyncio.wait_for(self.chillerModel.connect(), timeout=5)
+        await self.apply_warnings_and_alarms()
+        await asyncio.sleep(10)
         print("done with start")
 
     async def begin_disable(self, id_data):
@@ -142,6 +144,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         else:
             self.kiloarcModel.component = self.kiloarcModel.simComponent
             self.chillerModel.component = self.chillerModel.fakeComponent
+
+    async def apply_warnings_and_alarms(self):
+        await self.chillerModel.apply_warnings_and_alarms(self.config)
 
     async def do_powerLightOn(self, id_data):
         """ Powers the light on. It will go to 1200 watts, then drop
@@ -239,7 +244,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     self.summary_state = salobj.State.FAULT
                     print("**Chiller Pump OFF ")
                     await self.kiloarcModel.emergencyPowerLightOff()
-                if self.chillerModel.disconnected:
+                if self.chillerModel.reconnect_failed:
                     self.summary_state = salobj.State.FAULT
                     print("**Chiller disconnected")
                     await self.kiloarcModel.emergencyPowerLightOff()

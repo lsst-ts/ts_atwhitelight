@@ -155,7 +155,7 @@ class ChillerModel():
         }
 
         self.q = PriorityQueue()
-        self.disconnected = False 
+        self.reconnect_failed = False 
         self.component = None
         self.realComponent = ChillerComponent()
         self.fakeComponent = FakeChillerComponent()
@@ -231,6 +231,23 @@ class ChillerModel():
             pass
         await self.component.disconnect()
         self.disconnected = True
+    
+    async def apply_warnings_and_alarms(self, config):
+        msgs = []
+        msgs.append(self.cpe.setWarning("HiSupplyTemp", config.chiller_high_supply_temp_warning))
+        msgs.append(self.cpe.setWarning("LowSupplyTemp", config.chiller_low_supply_temp_warning))
+        msgs.append(self.cpe.setWarning("HiAmbientTemp", config.chiller_high_ambient_temp_warning))
+        msgs.append(self.cpe.setWarning("LowAmbientTemp", config.chiller_low_ambient_temp_warning))
+        msgs.append(self.cpe.setWarning("LowProcessFlow", config.chiller_low_process_flow_warning))
+
+        msgs.append(self.cpe.setAlarm("HiSupplyTemp", config.chiller_high_supply_temp_alarm))
+        msgs.append(self.cpe.setAlarm("LowSupplyTemp", config.chiller_low_supply_temp_alarm))
+        msgs.append(self.cpe.setAlarm("HiAmbientTemp", config.chiller_high_ambient_temp_alarm))
+        msgs.append(self.cpe.setAlarm("LowAmbientTemp", config.chiller_low_ambient_temp_alarm))
+        msgs.append(self.cpe.setAlarm("LowProcessFlow", config.chiller_low_process_flow_alarm))
+
+        for msg in msgs:
+            self.q.put((1, msg))
 
     async def setControlTemp(self, temp):
         msg = self.cpe.setControlTemp(temp)
@@ -301,8 +318,7 @@ class ChillerModel():
 
         if self.warningPresent:
             self.q.put((0, self.cpe.readWarningState()))
-    
-    
+
     async def priority_watchdog(self):
         """
         sends a high priority watchdog, which will make sure the chiller state
