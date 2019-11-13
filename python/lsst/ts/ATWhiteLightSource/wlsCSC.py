@@ -76,6 +76,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         done_task.set_result(None)
         self.telemetryLoopTask = done_task
         self.kiloarcListenerTask = done_task
+        self.sim_mode = 0
 
         self.config = None
         self.kiloarc_com_lock = asyncio.Lock()
@@ -127,7 +128,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         await super().begin_start(id_data)
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
-        await asyncio.wait_for(self.chillerModel.connect(), timeout=5)
+        await asyncio.wait_for(self.chillerModel.connect(self.config.chiller_ip, self.config.chiller_port, sim_mode=self.sim_mode), timeout=5)
         print("done with start")
 
     async def begin_disable(self, id_data):
@@ -137,12 +138,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """ Swaps between real and simulated component upon request.
         """
         print("sim mode " + str(sim_mode))
-        if sim_mode == 0:
-            self.kiloarcModel.component = self.kiloarcModel.realComponent
-            self.chillerModel.component = self.chillerModel.realComponent
-        else:
-            self.kiloarcModel.component = self.kiloarcModel.simComponent
-            self.chillerModel.component = self.chillerModel.fakeComponent
+        self.sim_mode = sim_mode
 
     async def do_powerLightOn(self, id_data):
         """ Powers the light on. It will go to 1200 watts, then drop
@@ -381,6 +377,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.tel_chillerFansSpeed.set(fan4Speed=int(self.chillerModel.fan4speed))
             self.tel_chillerFansSpeed.put()
 
+            print(str(self.chillerModel))
             await asyncio.sleep(self.telemetry_publish_interval)
         print("Telemetry loop OVER")
 
@@ -392,7 +389,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.kiloarcListenerLoopBool = False
         self.stateLoopBool = False
         self.kiloarcModel.disconnect()
-        await self.chillerModel.disconnect()
+        if self.chillerModel.component is not None:
+            await self.chillerModel.disconnect()
         await self.state_loop_task
         await self.kilo_interloc
         await self.telemetryLoopTask

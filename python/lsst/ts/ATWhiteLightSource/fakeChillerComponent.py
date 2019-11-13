@@ -4,9 +4,9 @@ import logging
 
 
 class FakeChillerComponent(object):
-    def __init__(self):
-        self.ip = "140.252.33.70"
-        self.port = 4001
+    def __init__(self, ip, port):
+        self.ip = ip
+        self.port = port
         self.timeout = 5
         self.con = False
         self.response_dict = \

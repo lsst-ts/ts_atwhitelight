@@ -5,9 +5,9 @@ import time
 
 
 class ChillerComponent(object):
-    def __init__(self):
-        self.ip = "140.252.33.70"
-        self.port = 4001
+    def __init__(self, ip, port):
+        self.ip = ip
+        self.port = port
         self.connect_task = None
         self.reader = None
         self.writer = None
