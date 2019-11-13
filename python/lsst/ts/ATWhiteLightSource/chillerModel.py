@@ -158,8 +158,11 @@ class ChillerModel():
         self.reconnect_failed = False 
         self.component = None
         self.cpe = ChillerPacketEncoder()
-        self.watchdogLoopBool = True
-        self.queueLoopBool = True
+
+        self.queue_task = None
+        self.watchdog_task = None
+        self.watchdogLoopBool = False
+        self.queueLoopBool = False
 
         #chiller state
         self.controlStatus = None
@@ -216,6 +219,9 @@ class ChillerModel():
             self.component = ChillerComponent(ip, port)
         await self.component.connect()
         self.disconnected = False
+
+        self.watchdogLoopBool = True
+        self.queueLoopBool = True
         self.queue_task = asyncio.ensure_future(self.queueloop())
         self.watchdog_task = asyncio.ensure_future(self.watchdogloop())
 
@@ -233,6 +239,8 @@ class ChillerModel():
         except:
             pass
         await self.component.disconnect()
+        self.queue_task = None
+        self.watchdog_task = None
         self.disconnected = True
 
     async def setControlTemp(self, temp):
