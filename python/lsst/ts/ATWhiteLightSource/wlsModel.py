@@ -3,8 +3,8 @@ __all__ = ["WhiteLightSourceModel"]
 import time
 import asyncio
 
-from wlsComponent import WhiteLightSourceComponent
-from wlsSimComponent import WhiteLightSourceComponentSimulator
+from .wlsComponent import WhiteLightSourceComponent
+from .wlsSimComponent import WhiteLightSourceComponentSimulator
 from lsst.ts import salobj
 
 
@@ -155,3 +155,9 @@ class WhiteLightSourceModel():
             self.off_time = time.time()
         else:
             raise salobj.ExpectedError("Bulb is already off")
+
+    def disconnect(self):
+        try:
+            self.component.client.close()
+        except AttributeError:
+            pass

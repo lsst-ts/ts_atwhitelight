@@ -4,9 +4,9 @@ import logging
 
 
 class FakeChillerComponent(object):
-    def __init__(self):
-        self.ip = "140.252.33.70"
-        self.port = 4001
+    def __init__(self, ip, port):
+        self.ip = ip
+        self.port = port
         self.timeout = 5
         self.con = False
         self.response_dict = \
@@ -38,6 +38,7 @@ class FakeChillerComponent(object):
 
     async def send_command(self, cmd):
         if cmd in self.response_dict:
+            await asyncio.sleep(0.05)
             return self.response_dict[cmd]
         else:
             return(cmd)

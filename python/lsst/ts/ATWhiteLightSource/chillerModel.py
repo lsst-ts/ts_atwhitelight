@@ -2,9 +2,9 @@ import asyncio
 from queue import PriorityQueue
 from enum import IntEnum
 import binascii
-from chillerComponent import ChillerComponent
-from fakeChillerComponent import FakeChillerComponent
-from chillerEncoder import ChillerPacketEncoder
+from .chillerComponent import ChillerComponent
+from .fakeChillerComponent import FakeChillerComponent
+from .chillerEncoder import ChillerPacketEncoder
 
 
 class ControlStatus(IntEnum):
@@ -155,10 +155,14 @@ class ChillerModel():
         }
 
         self.q = PriorityQueue()
+        self.reconnect_failed = False 
         self.component = None
-        self.realComponent = ChillerComponent()
-        self.fakeComponent = FakeChillerComponent()
         self.cpe = ChillerPacketEncoder()
+
+        self.queue_task = None
+        self.watchdog_task = None
+        self.watchdogLoopBool = False
+        self.queueLoopBool = False
 
         #chiller state
         self.controlStatus = None
@@ -204,28 +208,45 @@ class ChillerModel():
 
         return output
 
-    async def connect(self):
+    async def connect(self, ip, port, sim_mode=0):
         """
         connect to the chiller and start the background tasks that keep the model up-to-date
         """
-        print(type(self.component))
+        print("chillerModel CONNECT")
+        if sim_mode:
+            self.component = FakeChillerComponent(ip, port)
+        else: 
+            self.component = ChillerComponent(ip, port)
         await self.component.connect()
+        self.disconnected = False
+
+        self.watchdogLoopBool = True
+        self.queueLoopBool = True
         self.queue_task = asyncio.ensure_future(self.queueloop())
         self.watchdog_task = asyncio.ensure_future(self.watchdogloop())
 
     async def disconnect(self):
+        print("chillerModel DISCONNECT")
         """
         disconnect from chiller and halt loops
         """
-        self.queue_task.cancel()
-        self.watchdog_task.cancel()
+        self.watchdogLoopBool = False
+        self.queueLoopBool = False
+        await asyncio.sleep(1)
+        try:
+            self.queue_task.cancel()
+            self.watchdog_task.cancel()
+        except:
+            pass
         await self.component.disconnect()
+        self.queue_task = None
+        self.watchdog_task = None
+        self.disconnected = True
 
     async def setControlTemp(self, temp):
         msg = self.cpe.setControlTemp(temp)
-        await self.component.send_command(msg)
+        self.q.put((0, msg))
 
-    
     async def startChillin(self):
         msg = self.cpe.setChillerStatus(1)
         self.q.put((0, msg))
@@ -362,7 +383,7 @@ class ChillerModel():
         self.chillerStatus = SS
 
     def setControlTemp_decode(self, msg):
-        pass
+        self.setTemp = self.tempParser(msg)
 
     def readAlarmStateL1_decode(self, msg):
         alarmList = []
@@ -434,7 +455,7 @@ class ChillerModel():
         specs anyway...
         """
         print("Starting queue loop")
-        while True:
+        while self.queueLoopBool:
             if self.q.empty():
                 self.q.put((2, self.cpe.readFanSpeed(1)))
                 self.q.put((2, self.cpe.readFanSpeed(2)))
@@ -457,8 +478,8 @@ class ChillerModel():
                 print("Timeout Happened")
                 await self.component.disconnect()
                 await self.component.reconnect_loop()
-                if self.component.connected:
-                    print("we're reconnected (model)")
+                if not self.component.connected:
+                    self.reconnect_failed = True
 
 
             #all actions taken in response to messages from the chiller are handled by responder
@@ -471,7 +492,7 @@ class ChillerModel():
         are any warnings or alerts, so we check it more frequently than other telemetry.
         """
 
-        while True:
+        while self.watchdogLoopBool:
             self.q.put((1, self.cpe.watchdog()))
             await asyncio.sleep(7)
 

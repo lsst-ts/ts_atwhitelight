@@ -1,8 +1,8 @@
 __all__ = ["WhiteLightSourceCSC"]
 
 from lsst.ts import salobj
-from wlsModel import WhiteLightSourceModel
-from chillerModel import ChillerModel
+from .wlsModel import WhiteLightSourceModel
+from .chillerModel import ChillerModel
 import pathlib
 import asyncio
 import time
@@ -76,12 +76,18 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         done_task.set_result(None)
         self.telemetryLoopTask = done_task
         self.kiloarcListenerTask = done_task
+        self.sim_mode = 0
 
         self.config = None
         self.kiloarc_com_lock = asyncio.Lock()
 
-        asyncio.ensure_future(self.stateloop())
-        asyncio.ensure_future(self.kiloarc_interlock_loop())
+        self.state_loop_task = asyncio.ensure_future(self.stateloop())
+        self.kilo_interloc = asyncio.ensure_future(self.kiloarc_interlock_loop())
+
+        self.interlockLoopBool = True
+        self.telemetryLoopBool = True
+        self.kiloarcListenerLoopBool = True
+        self.stateLoopBool = True
 
     @staticmethod
     def get_config_pkg():
@@ -102,7 +108,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             if self.kiloarcModel.component.checkStatus().redLED:
                 raise RuntimeError("Can't enter Standby state while KiloArc still reporting errors")
         if self.summary_state == salobj.State.DISABLED:
-            self.telemetryLoop.cancel()
+            self.telemetryLoopTask.cancel()
             self.kiloarcListenerTask.cancel()
             await self.chillerModel.disconnect()
         
@@ -119,9 +125,11 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             transition. Confusing name, IMHO. 
         """
         print("begin_start()")
+        await super().begin_start(id_data)
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
-        await asyncio.wait_for(self.chillerModel.connect(), timeout=5)
+        await asyncio.wait_for(self.chillerModel.connect(self.config.chiller_ip, self.config.chiller_port, sim_mode=self.sim_mode), timeout=5)
+        print("done with start")
 
     async def begin_disable(self, id_data):
         print("begin_disable()")
@@ -130,12 +138,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """ Swaps between real and simulated component upon request.
         """
         print("sim mode " + str(sim_mode))
-        if sim_mode == 0:
-            self.kiloarcModel.component = self.kiloarcModel.realComponent
-            self.chillerModel.component = self.chillerModel.realComponent
-        else:
-            self.kiloarcModel.component = self.kiloarcModel.simComponent
-            self.chillerModel.component = self.chillerModel.fakeComponent
+        self.sim_mode = sim_mode
 
     async def do_powerLightOn(self, id_data):
         """ Powers the light on. It will go to 1200 watts, then drop
@@ -163,7 +166,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             below 800 will be treated like a powerLightOff command.
         """
         self.assert_enabled("setLightPower")
-        await self.kiloarcModel.setLightPower(id_data.data.setLightPower)
+        await self.kiloarcModel.setLightPower(id_data.power)
 
     async def do_emergencyPowerLightOff(self, id_data):
         """ Powers the light off. This one ignores the warmup period
@@ -182,7 +185,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 -------
                 None
         """
-        await self.chillerModel.setControlTemp(id_data.data.setChillerTemperature)
+        await self.chillerModel.setControlTemp(id_data.temperature)
+        
 
     async def do_startCooling(self,id_data):
         """ Powers chiller on
@@ -218,7 +222,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         periodically prints the current state. For debug
         """
-        while True:
+        while self.stateLoopBool:
             print("current state:  "+str(self.summary_state))
            # print("detailed state: "+str(self.detailed_state))
            # print(self.kiloarcListenerTask)
@@ -229,39 +233,47 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         Make sure we stop the bulb if something bad happens with the chiller
         """
-        while True:
-            print("interlock loop running")
+        while self.interlockLoopBool:
             if self.kiloarcModel.bulb_on:
                 if self.chillerModel.alarmPresent:
                     print("**Alarm Present")
+                    self.summary_state = salobj.State.FAULT
                     await self.kiloarcModel.emergencyPowerLightOff()
                 if self.chillerModel.chillerStatus != 1:
+                    self.summary_state = salobj.State.FAULT
                     print("**Chiller Status not RUN")
                     await self.kiloarcModel.emergencyPowerLightOff()
                 if self.chillerModel.pumpStatus == 0:
+                    self.summary_state = salobj.State.FAULT
                     print("**Chiller Pump OFF ")
                     await self.kiloarcModel.emergencyPowerLightOff()
+                if self.chillerModel.disconnected:
+                    self.summary_state = salobj.State.FAULT
+                    print("**Chiller disconnected")
+                    await self.kiloarcModel.emergencyPowerLightOff()
+
             await asyncio.sleep(1)
+
 
 
     async def reconnect_kiloarc_or_fault(self, max_attempts=3):
         async with self.kiloarc_com_lock:
-            print("Attempting reconnect to kiloarc")
+            self.log.debug("Attempting reconnect to kiloarc")
             num_attempts = 0
             while num_attempts < max_attempts:
                 num_attempts += 1 
-                print("iteration "+ str(num_attempts))
+                self.log.debug("iteration "+ str(num_attempts))
                 try:
-                    print("trying reconnect...")
+                    self.log.debug("trying reconnect...")
                     self.kiloarcModel.component.reconnect()
                     self.kiloarcModel.component.checkStatus()  # this triggers the exception we're fishing for.
-                    print("it worked")
+                    self.log.debug("it worked")
                     break
                 except ConnectionException:
-                    print("kiloarc connection problem, attempting reconnect " + str(num_attempts))
-                    print(str(num_attempts) + " " + str(max_attempts))
+                    self.log.debug("kiloarc connection problem, attempting reconnect " + str(num_attempts))
+                    self.log.debug(str(num_attempts) + " " + str(max_attempts))
                     if num_attempts >= max_attempts:
-                        print("going FAULT")
+                        self.log.debug("going FAULT")
                         self.summary_state = salobj.State.FAULT
                         self.detailed_state = WLSDetailedState.DISCONNECTED
                         self.telemetryLoopTask.cancel()
@@ -285,7 +297,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         except ConnectionException:
             await self.reconnect_kiloarc_or_fault()
         
-        while True:
+        while self.kiloarcListenerLoopBool:
             #if we lose connection to the ADAM, stop loops and go to FAULT state
             try:
                 async with self.kiloarc_com_lock:
@@ -321,9 +333,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 print("kiloarc reporting error FAULT")
                 self.summary_state = salobj.State.FAULT
                 self.detailed_state = WLSDetailedState.ERROR
-
-            print("HW Loop running")
             await asyncio.sleep(self.hardware_listener_interval)
+        print("Kiloarc listener loop OVER")
 
     async def telemetryLoop(self):
         """ Publish WLS Telemetry. This includes:
@@ -339,7 +350,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             -------
             None
         """
-        while True:
+        while self.telemetryLoopBool:
             # Kiloarc
 
             # calculate uptime and wattage since the last iteration of this loop
@@ -366,7 +377,26 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.tel_chillerFansSpeed.set(fan4Speed=int(self.chillerModel.fan4speed))
             self.tel_chillerFansSpeed.put()
 
-
-
-            print("Telemetry Loop Running")
+            print(str(self.chillerModel))
             await asyncio.sleep(self.telemetry_publish_interval)
+        print("Telemetry loop OVER")
+
+    async def close(self):
+        print("Running CLOSE")
+        
+        self.interlockLoopBool = False
+        self.telemetryLoopBool = False
+        self.kiloarcListenerLoopBool = False
+        self.stateLoopBool = False
+        self.kiloarcModel.disconnect()
+        if self.chillerModel.component is not None:
+            await self.chillerModel.disconnect()
+        await self.state_loop_task
+        await self.kilo_interloc
+        await self.telemetryLoopTask
+        await self.kiloarcListenerTask
+        self.kiloarcModel.cooldown_task.cancel()
+        self.kiloarcModel.warmup_task.cancel()
+        await super().close()
+
+
