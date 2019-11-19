@@ -20,7 +20,7 @@ class ChillerComponent(object):
         """Connect to chiller's ethernet-to-serial bridge"""
         # self.log.debug(f"connecting to: {self.ip}:{self.port}.")
         if self.connected:
-            raise Runt("Already connected")
+            raise RuntimeError("Already connected")
         await self.disconnect()
 
         print("about to connect to "+str(self.ip))
@@ -31,14 +31,6 @@ class ChillerComponent(object):
             print(e)
             raise e
         print("done connecting")
-
-        """Connect to chiller's ethernet-to-serial bridge"""
-        # self.log.debug(f"connecting to: {self.ip}:{self.port}.")
-        if self.connected:
-            raise RuntimeError("Already connected")
-        print("about to connect to "+str(self.ip))
-        self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.ip, self.port), self.timeout)
-        print("done connecting")
 
     async def disconnect(self):   
         if self.writer is not None:

@@ -157,8 +157,6 @@ class ChillerModel():
         self.q = PriorityQueue()
         self.reconnect_failed = False 
         self.component = None
-        self.realComponent = ChillerComponent()
-        self.fakeComponent = FakeChillerComponent()
         self.cpe = ChillerPacketEncoder()
         self.watchdogLoopBool = True
         self.queueLoopBool = True
@@ -207,11 +205,14 @@ class ChillerModel():
 
         return output
 
-    async def connect(self):
+    async def connect(self, ip, port, sim_mode=0):
         """
         connect to the chiller and start the background tasks that keep the model up-to-date
         """
-        print(type(self.component))
+        if sim_mode:
+            self.component = FakeChillerComponent(ip, port)
+        else:
+            self.component = ChillerComponent(ip, port)
         await self.component.connect()
         self.disconnected = False
         self.queue_task = asyncio.ensure_future(self.queueloop())
