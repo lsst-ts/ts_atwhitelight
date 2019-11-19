@@ -5,9 +5,9 @@ import time
 
 
 class ChillerComponent(object):
-    def __init__(self):
-        self.ip = "140.252.33.70"
-        self.port = 4001
+    def __init__(self, ip, port):
+        self.ip = ip
+        self.port = port
         self.connect_task = None
         self.reader = None
         self.writer = None
@@ -17,29 +17,32 @@ class ChillerComponent(object):
         self.chiller_com_lock = asyncio.Lock()
 
     async def connect(self):
+        """Connect to chiller's ethernet-to-serial bridge"""
+        # self.log.debug(f"connecting to: {self.ip}:{self.port}.")
+        if self.connected:
+            raise Runt("Already connected")
+        await self.disconnect()
+
+        print("about to connect to "+str(self.ip))
+        try:
+            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.ip, self.port), self.timeout)
+        except Exception as e:
+            logging.exception(e)
+            print(e)
+            raise e
+        print("done connecting")
+
         """Connect to chiller's ethernet-to-serial bridge"""
-        #self.log.debug(f"connecting to: {self.ip}:{self.port}.")
+        # self.log.debug(f"connecting to: {self.ip}:{self.port}.")
         if self.connected:
             raise RuntimeError("Already connected")
-        self.connect_task = asyncio.open_connection(self.ip, self.port)
         print("about to connect to "+str(self.ip))
-        self.reader, self.writer = await asyncio.wait_for(self.connect_task, self.timeout)
+        self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.ip, self.port), self.timeout)
         print("done connecting")
 
-    async def disconnect(self):
-        #try:
-        #    self.reply_handler_loop.cancel()
-        #    await self.reply_handler_loop
-        #except asyncio.CancelledError:
-        #    self.log.info("reply handler task cancelled")
-        #except Exception as e:
-        #    print(e)
-        #    self.log.exception(e)
-        
-        try:
+    async def disconnect(self):   
+        if self.writer is not None:
             self.writer.close()
-        except AttributeError:
-            pass
         
         self.reader = None
         self.writer = None
