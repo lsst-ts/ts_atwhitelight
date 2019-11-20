@@ -69,7 +69,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
 
         self.telemetry_publish_interval = 5
         self.hardware_listener_interval = 2
-        self.chillerModel = ChillerModel()
+        self.chillerModel = None
 
         #setup asyncio tasks for the loops
         done_task = asyncio.Future()
@@ -126,6 +126,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         await super().begin_start(id_data)
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
+        self.chillerModel = ChillerModel()
         await asyncio.wait_for(self.chillerModel.connect(self.config.chiller_ip, self.config.chiller_port), timeout=5)
         await self.apply_warnings_and_alarms()
         await asyncio.sleep(10)
@@ -133,6 +134,10 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
 
     async def begin_disable(self, id_data):
         print("begin_disable()")
+
+    async def end_standby(self, id_data):
+        print("end_standby()")
+        await self.chillerModel.disconnect()
 
     async def implement_simulation_mode(self, sim_mode):
         """ Swaps between real and simulated component upon request.
@@ -231,6 +236,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         Make sure we stop the bulb if something bad happens with the chiller
         """
         while self.interlockLoopBool:
+            print(self.summary_state)
             if self.kiloarcModel.bulb_on:
                 if self.chillerModel.alarmPresent:
                     print("**Alarm Present")
@@ -367,7 +373,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.tel_bulbWatthour.set_put(bulbhour=float(self.kiloarcModel.component.bulbWattHours))
 
             # Chiller
-
+            print(str(self.chillerModel))
             self.tel_chillerFansSpeed.set(fan1Speed=int(self.chillerModel.fan1speed))
             self.tel_chillerFansSpeed.set(fan2Speed=int(self.chillerModel.fan2speed))
             self.tel_chillerFansSpeed.set(fan3Speed=int(self.chillerModel.fan3speed))

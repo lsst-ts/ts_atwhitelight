@@ -225,11 +225,8 @@ class ChillerModel():
         self.watchdogLoopBool = False
         self.queueLoopBool = False
         await asyncio.sleep(1)
-        try:
-            self.queue_task.cancel()
-            self.watchdog_task.cancel()
-        except:
-            pass
+        self.queue_task.cancel()
+        self.watchdog_task.cancel()
         await self.component.disconnect()
         self.disconnected = True
     
@@ -483,6 +480,7 @@ class ChillerModel():
             except asyncio.TimeoutError:
                 print("Timeout Happened")
                 await self.component.disconnect()
+                print("component disconnected")
                 await self.component.reconnect_loop()
                 if self.component.connected:
                     print("we're reconnected (model)")

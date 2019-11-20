@@ -21,7 +21,6 @@ class ChillerComponent(object):
         # self.log.debug(f"connecting to: {self.ip}:{self.port}.")
         if self.connected:
             raise RuntimeError("Already connected")
-        await self.disconnect()
 
         print("about to connect to "+str(self.ip))
         try:
@@ -35,6 +34,7 @@ class ChillerComponent(object):
     async def disconnect(self):   
         if self.writer is not None:
             self.writer.close()
+            await self.writer.wait_closed()
         
         self.reader = None
         self.writer = None
@@ -56,9 +56,10 @@ class ChillerComponent(object):
     async def reconnect_loop(self, timelimit=120):
 
         endTime = time.time() + timelimit
-
-        while time.time < endTime:
-            print("reconnect attempt " + str(attempts))
+        print("starting chiller reconnect")
+        while time.time() < endTime:
+            await asyncio.sleep(1)
+            print("attempting reconnect" + str(endTime - time.time()))
             print(self.connected)
             if self.connected:
                 print("SUCCESS??")
@@ -69,7 +70,6 @@ class ChillerComponent(object):
                     print("\tconnected!")
                 except asyncio.TimeoutError:
                     print("TIMED OUT")
-            attempts += 1 
         print("COULDNT RECON")
 
 
