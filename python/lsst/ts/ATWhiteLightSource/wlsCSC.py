@@ -69,13 +69,14 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
 
         self.telemetry_publish_interval = 5
         self.hardware_listener_interval = 2
-        self.chillerModel = None
+        self.chillerModel = ChillerModel()
+        self.sim_mode = 0
 
         #setup asyncio tasks for the loops
         done_task = asyncio.Future()
         done_task.set_result(None)
         self.telemetryLoopTask = done_task
-        self.kiloarcListenerTask = done_task
+        self.kiloarcListenerTask = done_task\
 
         self.config = None
         self.kiloarc_com_lock = asyncio.Lock()
@@ -93,6 +94,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
 
     async def configure(self, config):
         self.config = config
+        self.chillerModel.config = config
 
     async def begin_standby(self, id_data):
         """ When we leave fault state to enter standby, we 
@@ -126,7 +128,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         await super().begin_start(id_data)
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
-        self.chillerModel = ChillerModel()
         await asyncio.wait_for(self.chillerModel.connect(self.config.chiller_ip, self.config.chiller_port), timeout=5)
         await self.apply_warnings_and_alarms()
         await asyncio.sleep(10)
@@ -142,13 +143,11 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
     async def implement_simulation_mode(self, sim_mode):
         """ Swaps between real and simulated component upon request.
         """
-        print("sim mode " + str(sim_mode))
+        self.sim_mode = sim_mode
         if sim_mode == 0:
             self.kiloarcModel.component = self.kiloarcModel.realComponent
-            self.chillerModel.component = self.chillerModel.realComponent
         else:
             self.kiloarcModel.component = self.kiloarcModel.simComponent
-            self.chillerModel.component = self.chillerModel.fakeComponent
 
     async def apply_warnings_and_alarms(self):
         await self.chillerModel.apply_warnings_and_alarms(self.config)

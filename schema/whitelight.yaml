@@ -43,7 +43,7 @@ properties:
   chiller_high_ambient_temp_warning:
     description: DegC threshold for publishing a warning for high ambient temp
     type: number
-    default: 30
+    default: 40
   chiller_low_ambient_temp_warning:
     description: DegC threshold for publishing a warning for low ambient temp
     type: number
@@ -63,7 +63,7 @@ properties:
   chiller_high_ambient_temp_alarm:
     description: DegC threshold for going to fault state and shutting down the lamp due to high ambient temp
     type: number
-    default: 40
+    default: 50
   chiller_low_ambient_temp_alarm:
     description: DegC threshold for going to fault state and shutting down the lamp due to low ambient temp
     type: number
