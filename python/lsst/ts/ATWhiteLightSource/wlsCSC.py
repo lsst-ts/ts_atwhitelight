@@ -76,7 +76,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         done_task = asyncio.Future()
         done_task.set_result(None)
         self.telemetryLoopTask = done_task
-        self.kiloarcListenerTask = done_task\
+        self.kiloarcListenerTask = done_task
 
         self.config = None
         self.kiloarc_com_lock = asyncio.Lock()
