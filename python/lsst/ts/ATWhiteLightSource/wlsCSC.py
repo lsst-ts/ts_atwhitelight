@@ -86,6 +86,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.interlockLoopBool = True
         self.telemetryLoopBool = True
         self.kiloarcListenerLoopBool = True
+
         self.last_warning_state = None
 
 
@@ -308,7 +309,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 async with self.kiloarc_com_lock:
                     currentState = self.kiloarcModel.component.checkStatus()
                 if currentState != previousState:
-                    print("Voltage change detected! \n" + str(currentState))
                     self.evt_whiteLightStatus.set_put(
                         wattageChange = float(currentState.wattage),
                         coolingDown = currentState.blueLED,
@@ -466,8 +466,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             elif "Low Ambient Temp Warning" in self.last_warning_state and self.last_warning_state["Low Ambient Temp Warning"]:
                 self.evt_chillerLowAmbientTempWarning.set_put(timestamp=time.time(), warning=False)
                 self.last_warning_state["Low Ambient Temp Warning"] = False
-
-            # Kiloarc Events
 
             await asyncio.sleep(self.telemetry_publish_interval)
         print("Telemetry loop OVER")

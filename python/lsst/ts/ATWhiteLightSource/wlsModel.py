@@ -78,7 +78,7 @@ class WhiteLightSourceModel():
         if not self.cooldown_task.done():  # are we in the cooldown period?
             elapsed = time.time() - self.off_time
             remaining = round(self.cooldownPeriod - elapsed, 1)
-            description = f"Can't power on bulb during {self.cooldownPeriod}cool-off period. Please wait "
+            description = f"Can't power on bulb during {self.cooldownPeriod} second cool-off period. Please wait "
             raise salobj.ExpectedError(description + str(remaining) + " seconds.")
         if self.bulb_on:
             raise salobj.ExpectedError("Can't power on when we're already powered on.")
