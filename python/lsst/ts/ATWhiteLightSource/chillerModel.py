@@ -187,8 +187,9 @@ class ChillerModel():
         self.fan3speed = 0
         self.fan4speed = 0
         self.chillerUptime = None
-        self.current_warnings = []
-        self.current_alarms = []
+        self.l1Alarms = []
+        self.l2Alarms = []
+        self.warnings = []
 
     def __str__(self):
         output = "Control Status: " + str(self.controlStatus) \
@@ -215,7 +216,6 @@ class ChillerModel():
         """
         connect to the chiller and start the background tasks that keep the model up-to-date
         """
-        #await self.disconnect()
         if sim_mode:
             self.component = FakeChillerComponent(ip, port, self.chiller_com_lock)
         else:
@@ -411,11 +411,9 @@ class ChillerModel():
                 if mask[j]:
                     alarmList.append(self.alarms.L1Alarms[i][j])
 
-        for a in alarmList:
-            self.current_alarms.append(a)
+        self.l1Alarms = alarmList
  
     def readAlarmStateL2_decode(self, msg):
-        print(msg)
         alarmList = []
         for i in range(8):
             val = int(msg[i+1], 16)
@@ -427,8 +425,7 @@ class ChillerModel():
                     elif msg[0] == "2":
                         alarmList.append(self.alarms.L2AlarmsPt2[i+1][j])
 
-        for a in alarmList:
-            self.current_alarms.append(a)
+        self.l2Alarms = alarmList
 
     def readWarningState_decode(self, msg):
         warningList = []
@@ -439,9 +436,8 @@ class ChillerModel():
                 if mask[j]:
                     warningList.append(self.alarms.Warnings[i][j])
 
-        for w in warningList:
-            self.current_warnings.append(w)
-        
+        self.warnings = warningList
+
 
     def setWarning_decode(self, msg):
         pass

@@ -34,8 +34,8 @@ class WhiteLightSourceComponent():
 
     """
 
-    def __init__(self, ip='140.252.33.160', port=502):
-        self.client = ModbusClient(ip, port)
+    def __init__(self, ip, port):
+        self.client = None
         self.clientip = ip
         self.clientport = port
         self.bulbHours = 0  # Read this from EFD when we initialize

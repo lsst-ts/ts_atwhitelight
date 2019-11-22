@@ -63,7 +63,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         schema_path = pathlib.Path(__file__).resolve().parents[4].joinpath("schema", "whitelight.yaml")
         super().__init__("ATWhiteLight", index=0, schema_path=schema_path, config_dir=config_dir,
                          initial_state=initial_state, initial_simulation_mode=initial_simulation_mode)
-        self.kiloarcModel = WhiteLightSourceModel()
+        self.kiloarcModel = None
         
         self.detailed_state = WLSDetailedState.OFFLINE
 
@@ -86,6 +86,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.interlockLoopBool = True
         self.telemetryLoopBool = True
         self.kiloarcListenerLoopBool = True
+        self.last_warning_state = None
 
 
     @staticmethod
@@ -93,8 +94,10 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         return("ts_config_atcalsys")
 
     async def configure(self, config):
+        print('csc config')
         self.config = config
         self.chillerModel.config = config
+        self.kiloarcModel = WhiteLightSourceModel(self.config.adam_ip, self.config.adam_port)
 
     async def begin_standby(self, id_data):
         """ When we leave fault state to enter standby, we 
@@ -352,8 +355,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             -------
             None
         """
+        self.last_warning_state = {}
         while self.telemetryLoopBool:
-            # Kiloarc
+            # Kiloarc Telemetry
 
             # calculate uptime and wattage since the last iteration of this loop
             lastIntervalUptime = time.time()/3600 - self.kiloarcModel.component.bulbHoursLastUpdate
@@ -371,7 +375,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.tel_bulbhour.set_put(bulbhour=float(self.kiloarcModel.component.bulbHours))
             self.tel_bulbWatthour.set_put(bulbhour=float(self.kiloarcModel.component.bulbWattHours))
 
-            # Chiller
+            # Chiller Telemetry
             print(str(self.chillerModel))
             self.tel_chillerFansSpeed.set(fan1Speed=int(self.chillerModel.fan1speed))
             self.tel_chillerFansSpeed.set(fan2Speed=int(self.chillerModel.fan2speed))
@@ -411,7 +415,59 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             if self.chillerModel.teDrivePct is not None:
                 self.tel_chillerTEDriveLevel.set(chillerTEDriveLevel=self.chillerModel.teDrivePct)
             self.tel_chillerTEDriveLevel.set(timestamp=time.time())
-            self.tel_chillerTEDriveLevel.put()            
+            self.tel_chillerTEDriveLevel.put()
+
+            # Chiller Events
+            if "Low Process Flow Warning" in self.chillerModel.warnings:
+                self.evt_chillerLowFlowWarning.set_put(timestamp=time.time(), warning=True)
+                self.last_warning_state["Low Process Flow Warning"] = True
+            elif "Low Process Flow Warning" in self.last_warning_state and self.last_warning_state["Low Process Flow Warning"]:
+                self.evt_chillerLowFlowWarning.set_put(timestamp=time.time(), warning=False)
+                self.last_warning_state["Low Process Flow Warning"] = False
+
+            if "Process Fluid Level Warning" in self.chillerModel.warnings:
+                self.evt_chillerFluidLevelWarning.set_put(timestamp=time.time(), warning=True)
+                self.last_warning_state["Process Fluid Level Warning"] = True
+            elif "Process Fluid Level Warning" in self.last_warning_state and self.last_warning_state["Process Fluid Level Warning"]:
+                self.evt_chillerFluidLevelWarning.set_put(timestamp=time.time(), warning=False)
+                self.last_warning_state["Process Fluid Level Warning"] = False
+
+            if "Switch to Supply Temp as Control Temp Warning" in self.chillerModel.warnings:
+                self.evt_chillerSwitchToSupplyTempWarning.set_put(timestamp=time.time(), warning=True)
+                self.last_warning_state["Switch to Supply Temp as Control Temp Warning"] = True
+            elif "Switch to Supply Temp as Control Temp Warning" in self.last_warning_state and self.last_warning_state["Switch to Supply Temp as Control Temp Warning"]:
+                self.evt_chillerSwitchToSupplyTempWarning.set_put(timestamp=time.time(), warning=False)
+                self.last_warning_state["Switch to Supply Temp as Control Temp Warning"] = False
+
+            if "High Control Temp Warning" in self.chillerModel.warnings:
+                self.evt_chillerHighControlTempWarning.set_put(timestamp=time.time(), warning=True)
+                self.last_warning_state["High Control Temp Warning"] = True
+            elif "High Control Temp Warning" in self.last_warning_state and self.last_warning_state["High Control Temp Warning"]:
+                self.evt_cchillerHighControlTempWarning.set_put(timestamp=time.time(), warning=False)
+                self.last_warning_state["High Control Temp Warning"] = False
+
+            if "Low Control Temp Warning" in self.chillerModel.warnings:
+                self.evt_chillerLowControlTempWarning.set_put(timestamp=time.time(), warning=True)
+                self.last_warning_state["Low Control Temp Warning"] = True
+            elif "Low Control Temp Warning" in self.last_warning_state and self.last_warning_state["Low Control Temp Warning"]:
+                self.evt_chillerLowControlTempWarning.set_put(timestamp=time.time(), warning=False)
+                self.last_warning_state["Low Control Temp Warning"] = False
+
+            if "High Ambient Temp Warning" in self.chillerModel.warnings:
+                self.evt_chillerHighAmbientTempWarning.set_put(timestamp=time.time(), warning=True)
+                self.last_warning_state["High Ambient Temp Warning"] = True
+            elif "High Ambient Temp Warning" in self.last_warning_state and self.last_warning_state["High Ambient Temp Warning"]:
+                self.evt_cchillerHighAmbientTempWarning.set_put(timestamp=time.time(), warning=False)
+                self.last_warning_state["High Ambient Temp Warning"] = False
+
+            if "Low Ambient Temp Warning" in self.chillerModel.warnings:
+                self.evt_chillerLowAmbientTempWarning.set_put(timestamp=time.time(), warning=True)
+                self.last_warning_state["Low Ambient Temp Warning"] = True
+            elif "Low Ambient Temp Warning" in self.last_warning_state and self.last_warning_state["Low Ambient Temp Warning"]:
+                self.evt_chillerLowAmbientTempWarning.set_put(timestamp=time.time(), warning=False)
+                self.last_warning_state["Low Ambient Temp Warning"] = False
+
+            # Kiloarc Events
 
             await asyncio.sleep(self.telemetry_publish_interval)
         print("Telemetry loop OVER")
