@@ -43,13 +43,15 @@ class WhiteLightSourceModel():
         how long do we wait after turing on before we can turn back off
     """
     
-    def __init__(self, ip, port):
-        self.realComponent = WhiteLightSourceComponent(ip, port)
-        self.simComponent = WhiteLightSourceComponentSimulator()
-        self.component = self.simComponent
+    def __init__(self, ip=None, port=None):
+        self.ip = ip
+        self.port = port
+        self.config = None
+        self.simulation_mode = True
+        self.component = None
         self.startupWattage = 1200
         self.defaultWattage = 800
-        self.startupTime = 2
+        self.startupTime = 5
         done_task = asyncio.Future()
         done_task.set_result(None)
         self.on_task = done_task
@@ -60,6 +62,12 @@ class WhiteLightSourceModel():
         self.on_time = None
         self.cooldownPeriod = 900
         self.warmupPeriod = 900
+
+    def connect(self):
+        if self.simulation_mode:
+            self.component = WhiteLightSourceComponentSimulator()
+        else:
+            self.component = WhiteLightSourceComponent(self.config.adam_ip, self.config.adam_port)
 
     async def powerLightOn(self):
         """ Signals the Horiba KiloArc to power light on.

@@ -36,6 +36,9 @@ class ChillerComponent(object):
             self.writer.close()
             await self.writer.wait_closed()
         
+        del self.reader
+        del self.writer
+
         self.reader = None
         self.writer = None
 

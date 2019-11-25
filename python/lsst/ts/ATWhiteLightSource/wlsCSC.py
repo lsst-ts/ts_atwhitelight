@@ -70,6 +70,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.telemetry_publish_interval = 5
         self.hardware_listener_interval = 2
         self.chillerModel = ChillerModel()
+        self.kiloarcModel = WhiteLightSourceModel()
         self.sim_mode = 0
 
         #setup asyncio tasks for the loops
@@ -98,7 +99,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         print('csc config')
         self.config = config
         self.chillerModel.config = config
-        self.kiloarcModel = WhiteLightSourceModel(self.config.adam_ip, self.config.adam_port)
+        self.kiloarcModel.config = config
+        
 
     async def begin_standby(self, id_data):
         """ When we leave fault state to enter standby, we 
@@ -130,6 +132,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         print("begin_start()")
         await super().begin_start(id_data)
+        self.kiloarcModel.connect()
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
         await asyncio.wait_for(self.chillerModel.connect(self.config.chiller_ip, self.config.chiller_port), timeout=5)
