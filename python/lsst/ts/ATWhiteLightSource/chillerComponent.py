@@ -5,30 +5,40 @@ import time
 
 
 class ChillerComponent(object):
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, com_lock):
         self.ip = ip
         self.port = port
         self.connect_task = None
         self.reader = None
         self.writer = None
-        self.timeout = 5
+        self.timeout = 15
         self.response_dict = {}
         self.last_response = None
-        self.chiller_com_lock = asyncio.Lock()
+        self.chiller_com_lock = com_lock
 
     async def connect(self):
-        """Connect to chiller's ethernet-to-serial bridge"""
-        #self.log.debug(f"connecting to: {self.ip}:{self.port}.")
+        """Connect to chiller's ethernet-to-serial bridge"""
+        # self.log.debug(f"connecting to: {self.ip}:{self.port}.")
         if self.connected:
-            raise RuntimeError("Already connected")
-        print("about to connect to "+str(self.ip))
-        self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.ip, self.port), self.timeout)
-        print("done connecting")
+            raise RuntimeError("Already connected")
+
+        print("about to connect to "+str(self.ip))
+        try:
+            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.ip, self.port), self.timeout)
+        except Exception as e:
+            logging.exception(e)
+            print(e)
+            raise e
+        print("done connecting")
 
     async def disconnect(self):   
         if self.writer is not None:
             self.writer.close()
+            await self.writer.wait_closed()
         
+        del self.reader
+        del self.writer
+
         self.reader = None
         self.writer = None
 
@@ -45,26 +55,6 @@ class ChillerComponent(object):
                 return(response)
         else:
             raise ConnectionError("not connected")
-
-    async def reconnect_loop(self, timelimit=120):
-
-        endTime = time.time() + timelimit
-
-        while time.time < endTime:
-            print("reconnect attempt " + str(attempts))
-            print(self.connected)
-            if self.connected:
-                print("SUCCESS??")
-                break
-            else:
-                try:
-                    await self.connect()
-                    print("\tconnected!")
-                except asyncio.TimeoutError:
-                    print("TIMED OUT")
-            attempts += 1 
-        print("COULDNT RECON")
-
 
     @property
     def connected(self):

@@ -43,13 +43,15 @@ class WhiteLightSourceModel():
         how long do we wait after turing on before we can turn back off
     """
     
-    def __init__(self):
-        self.realComponent = WhiteLightSourceComponent()
-        self.simComponent = WhiteLightSourceComponentSimulator()
-        self.component = self.simComponent
+    def __init__(self, ip=None, port=None):
+        self.ip = ip
+        self.port = port
+        self.config = None
+        self.simulation_mode = True
+        self.component = None
         self.startupWattage = 1200
         self.defaultWattage = 800
-        self.startupTime = 2
+        self.startupTime = 5
         done_task = asyncio.Future()
         done_task.set_result(None)
         self.on_task = done_task
@@ -60,6 +62,12 @@ class WhiteLightSourceModel():
         self.on_time = None
         self.cooldownPeriod = 900
         self.warmupPeriod = 900
+
+    def connect(self):
+        if self.simulation_mode:
+            self.component = WhiteLightSourceComponentSimulator()
+        else:
+            self.component = WhiteLightSourceComponent(self.config.adam_ip, self.config.adam_port)
 
     async def powerLightOn(self):
         """ Signals the Horiba KiloArc to power light on.
@@ -77,8 +85,8 @@ class WhiteLightSourceModel():
         """
         if not self.cooldown_task.done():  # are we in the cooldown period?
             elapsed = time.time() - self.off_time
-            remaining = self.cooldownPeriod - elapsed
-            description = "Can't power on bulb during cool-off period. Please wait "
+            remaining = round(self.cooldownPeriod - elapsed, 1)
+            description = f"Can't power on bulb during {self.cooldownPeriod} second cool-off period. Please wait "
             raise salobj.ExpectedError(description + str(remaining) + " seconds.")
         if self.bulb_on:
             raise salobj.ExpectedError("Can't power on when we're already powered on.")
@@ -120,9 +128,9 @@ class WhiteLightSourceModel():
         if watts < 800:
             # turn bulb off
             if not self.warmup_task.done():
-                description = "Can't power off bulb during warm-up period. Please wait "
+                description = f"Can't power off bulb during {self.warmupPeriod} second warm-up period. Please wait "
                 elapsed = time.time() - self.on_time
-                remaining = self.warmupPeriod - elapsed
+                remaining = round(self.warmupPeriod - elapsed, 1)
                 raise salobj.ExpectedError(description + str(remaining) + " seconds.")
                 
             if self.bulb_on:

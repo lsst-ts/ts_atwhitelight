@@ -34,8 +34,8 @@ class WhiteLightSourceComponent():
 
     """
 
-    def __init__(self, ip='140.252.33.160', port=502):
-        self.client = ModbusClient(ip, port)
+    def __init__(self, ip, port):
+        self.client = None
         self.clientip = ip
         self.clientport = port
         self.bulbHours = 0  # Read this from EFD when we initialize
@@ -90,7 +90,7 @@ class WhiteLightSourceComponent():
         KiloArcStatus = namedtuple('KiloArcStatus', ['wattage','greenLED','blueLED','redLED','errorLED'])
         
         voltages = self._readVoltage()
-        cutoff = 3.0
+        cutoff = 2.0
         
         status = KiloArcStatus(self.bulbState, voltages[0] > cutoff, voltages[1] > cutoff,\
             voltages[2] > cutoff, voltages[3] > cutoff)
