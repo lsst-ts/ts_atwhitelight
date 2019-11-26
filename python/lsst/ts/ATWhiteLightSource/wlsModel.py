@@ -68,6 +68,7 @@ class WhiteLightSourceModel():
             self.component = WhiteLightSourceComponentSimulator()
         else:
             self.component = WhiteLightSourceComponent(self.config.adam_ip, self.config.adam_port)
+            self.component.reconnect()
 
     async def powerLightOn(self):
         """ Signals the Horiba KiloArc to power light on.
