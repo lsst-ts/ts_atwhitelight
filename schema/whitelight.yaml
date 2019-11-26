@@ -72,3 +72,11 @@ properties:
     description: Liters per minute threshold for going to fault state and shutting down the lamp due to low process flow
     type: number
     default: 0.3
+  kiloarc_status_signal_threshold:
+    description: Voltage threshold for reading the kiloarc status
+    type: number
+    default: 2.0
+  keep_on_chillin_timer:
+    description: How many seconds to keep the chiller running after the bulb is extinguished
+    type: number
+    default: 900

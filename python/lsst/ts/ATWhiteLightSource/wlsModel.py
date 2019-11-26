@@ -43,11 +43,9 @@ class WhiteLightSourceModel():
         how long do we wait after turing on before we can turn back off
     """
     
-    def __init__(self, ip=None, port=None):
-        self.ip = ip
-        self.port = port
+    def __init__(self):
         self.config = None
-        self.simulation_mode = True
+        self.simulation_mode = False
         self.component = None
         self.startupWattage = 1200
         self.defaultWattage = 800
@@ -67,8 +65,8 @@ class WhiteLightSourceModel():
         if self.simulation_mode:
             self.component = WhiteLightSourceComponentSimulator()
         else:
+            print("connecting with " + str(self.config.adam_ip))
             self.component = WhiteLightSourceComponent(self.config.adam_ip, self.config.adam_port)
-
     async def powerLightOn(self):
         """ Signals the Horiba KiloArc to power light on.
             We always set the brightness to self.startupWattage for a
