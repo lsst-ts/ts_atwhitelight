@@ -16,7 +16,7 @@ properties:
   adam_ip:
     description: IP of the kiloarc's ADAM controller.
     type: string
-    default: "140.252.33.138"
+    default: "140.252.33.160"
   adam_port:
     description: port of the kiloarc's ADAM controller.
     type: number

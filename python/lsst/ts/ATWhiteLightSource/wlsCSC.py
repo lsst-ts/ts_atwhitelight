@@ -311,6 +311,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             try:
                 async with self.kiloarc_com_lock:
                     currentState = self.kiloarcModel.component.checkStatus()
+                    print(currentState)
                 if currentState != previousState:
                     self.evt_whiteLightStatus.set_put(
                         wattageChange = float(currentState.wattage),

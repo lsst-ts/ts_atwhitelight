@@ -47,7 +47,7 @@ class WhiteLightSourceModel():
         self.ip = ip
         self.port = port
         self.config = None
-        self.simulation_mode = True
+        self.simulation_mode = False
         self.component = None
         self.startupWattage = 1200
         self.defaultWattage = 800
