@@ -114,18 +114,15 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         print("begin_standby()")
         # don't let the user leave fault state if the KiloArc
         # or chiller is reporting an error
-        try:
-            if self.summary_state == salobj.State.FAULT:
-                async with self.kiloarc_com_lock:
-                    if self.kiloarcModel.component.checkStatus().redLED:
-                        raise RuntimeError("Can't enter Standby state while KiloArc still reporting errors")
-            if self.chillerModel.alarmPresent:
-                raise RuntimeError("Can't enter Standby state while chiller is still reporting alarm status")
-            if not self.keep_on_chillin_task.done():
-                remaining = self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time)
-                raise RuntimeError(f"Can't enter Standby state; chiller must stay on for {self.config.keep_on_chillin_timer} seconds. {remaining} seconds remain.")
-        except Exception as e:
-            print(e)
+        if self.summary_state == salobj.State.FAULT:
+            async with self.kiloarc_com_lock:
+                if self.kiloarcModel.component.checkStatus().redLED:
+                    raise RuntimeError("Can't enter Standby state while KiloArc still reporting errors")
+        if self.chillerModel.alarmPresent:
+            raise RuntimeError("Can't enter Standby state while chiller is still reporting alarm status")
+        if not self.keep_on_chillin_task.done():
+            remaining = self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time)
+            raise RuntimeError(f"Can't enter Standby state; chiller must stay on for {self.config.keep_on_chillin_timer} seconds. {remaining} seconds remain.")
         
         self.telemetryLoopTask.cancel()
         self.kiloarcListenerTask.cancel()
@@ -254,7 +251,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             raise salobj.ExpectedError("Can't stop chillin' while the bulb is still on.")
         if not self.keep_on_chillin_task.done():
             remaining = self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time)
-            raise salobj.ExpectedError("Lamp was recently extinguished; can't stop chillin' for {remaining} seconds.")
+            raise salobj.ExpectedError(f"Lamp was recently extinguished; can't stop chillin' for {remaining} seconds.")
         else:
             await self.chillerModel.stopChillin()
 
