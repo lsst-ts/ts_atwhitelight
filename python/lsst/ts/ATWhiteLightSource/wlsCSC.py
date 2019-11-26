@@ -79,6 +79,10 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.telemetryLoopTask = done_task
         self.kiloarcListenerTask = done_task
 
+
+        self.keep_on_chillin_task = done_task
+        self.lamp_off_time = None
+
         self.config = None
         self.kiloarc_com_lock = asyncio.Lock()
 
@@ -110,13 +114,24 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         print("begin_standby()")
         # don't let the user leave fault state if the KiloArc
         # or chiller is reporting an error
-        if self.summary_state == salobj.State.FAULT:
-            if self.kiloarcModel.component.checkStatus().redLED:
-                raise RuntimeError("Can't enter Standby state while KiloArc still reporting errors")
-        if self.summary_state == salobj.State.DISABLED:
-            self.telemetryLoopTask.cancel()
-            self.kiloarcListenerTask.cancel()
-            await self.chillerModel.disconnect()
+        try:
+            if self.summary_state == salobj.State.FAULT:
+                async with self.kiloarc_com_lock:
+                    if self.kiloarcModel.component.checkStatus().redLED:
+                        raise RuntimeError("Can't enter Standby state while KiloArc still reporting errors")
+            if self.chillerModel.alarmPresent:
+                raise RuntimeError("Can't enter Standby state while chiller is still reporting alarm status")
+            if not self.keep_on_chillin_task.done():
+                remaining = self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time)
+                raise RuntimeError(f"Can't enter Standby state; chiller must stay on for {self.config.keep_on_chillin_timer} seconds. {remaining} seconds remain.")
+        except Exception as e:
+            print(e)
+        
+        self.telemetryLoopTask.cancel()
+        self.kiloarcListenerTask.cancel()
+        await self.chillerModel.disconnect()
+        self.kiloarcModel.disconnect()
+        
         
 
     async def begin_enable(self, id_data):
@@ -137,7 +152,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
         await asyncio.wait_for(self.chillerModel.connect(self.config.chiller_ip, self.config.chiller_port), timeout=5)
         await self.apply_warnings_and_alarms()
-        await asyncio.sleep(10)
         print("done with start")
 
     async def begin_disable(self, id_data):
@@ -178,6 +192,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             warming up.
         """
         await self.kiloarcModel.setLightPower(0)
+        self.lamp_off_time = time.time()
+        self.keep_on_chillin_task = asyncio.ensure_future(asyncio.sleep(self.config.keep_on_chillin_timer))
 
     async def do_setLightPower(self, id_data):
         """ Sets the light power. id_data must contain a topic that 
@@ -192,6 +208,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             that the CSC normally enforces.
         """
         await self.kiloarcModel.emergencyPowerLightOff()
+        self.lamp_off_time = time.time()
+        self.keep_on_chillin_task = asyncio.ensure_future(asyncio.sleep(self.config.keep_on_chillin_timer))
 
     async def do_setChillerTemperature(self,id_data):
         """ Sets the target temperature for the chiller
@@ -234,6 +252,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             """
         if self.kiloarcModel.bulb_on:
             raise salobj.ExpectedError("Can't stop chillin' while the bulb is still on.")
+        if not self.keep_on_chillin_task.done():
+            remaining = self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time)
+            raise salobj.ExpectedError("Lamp was recently extinguished; can't stop chillin' for {remaining} seconds.")
         else:
             await self.chillerModel.stopChillin()
 
