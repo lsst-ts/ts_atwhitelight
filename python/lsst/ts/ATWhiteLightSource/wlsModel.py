@@ -47,7 +47,7 @@ class WhiteLightSourceModel():
         self.ip = ip
         self.port = port
         self.config = None
-        self.simulation_mode = True
+        self.simulation_mode = False
         self.component = None
         self.startupWattage = 1200
         self.defaultWattage = 800
@@ -64,6 +64,7 @@ class WhiteLightSourceModel():
         self.warmupPeriod = 900
 
     def connect(self):
+        print("connecting to ADAM", self.config.adam_ip, self.config.adam_port)
         if self.simulation_mode:
             self.component = WhiteLightSourceComponentSimulator()
         else:

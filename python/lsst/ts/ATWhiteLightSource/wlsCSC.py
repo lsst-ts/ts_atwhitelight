@@ -121,7 +121,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         if self.chillerModel.alarmPresent:
             raise RuntimeError("Can't enter Standby state while chiller is still reporting alarm status")
         if not self.keep_on_chillin_task.done():
-            remaining = self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time)
+            remaining = round(self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time),0)
             raise RuntimeError(f"Can't enter Standby state; chiller must stay on for {self.config.keep_on_chillin_timer} seconds. {remaining} seconds remain.")
         
         self.telemetryLoopTask.cancel()
@@ -162,10 +162,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """ Swaps between real and simulated component upon request.
         """
         self.sim_mode = sim_mode
-        if sim_mode == 0:
-            self.kiloarcModel.component = self.kiloarcModel.realComponent
-        else:
-            self.kiloarcModel.component = self.kiloarcModel.simComponent
+        self.kiloarcModel.simulation_mode = sim_mode
+
 
     async def apply_warnings_and_alarms(self):
         await self.chillerModel.apply_warnings_and_alarms(self.config)
@@ -250,7 +248,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         if self.kiloarcModel.bulb_on:
             raise salobj.ExpectedError("Can't stop chillin' while the bulb is still on.")
         if not self.keep_on_chillin_task.done():
-            remaining = self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time)
+            remaining = round(self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time),0)
             raise salobj.ExpectedError(f"Lamp was recently extinguished; can't stop chillin' for {remaining} seconds.")
         else:
             await self.chillerModel.stopChillin()
@@ -264,7 +262,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             if self.kiloarcModel.bulb_on:
                 if self.chillerModel.alarmPresent:
                     print("**Alarm Present")
-                    self.summary_state = salobj.State.FAULT
+                    self.fault(report="Alarm description")
                     await self.kiloarcModel.emergencyPowerLightOff()
                 if self.chillerModel.chillerStatus != 1:
                     self.summary_state = salobj.State.FAULT
@@ -347,7 +345,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 else:
                     self.detailed_state = WLSDetailedState.OFFLINE
                 previousState = currentState
-            except ConnectionException:
+            except Exception as e:
+                print(e)
+                print("Connection Problem with ADAM/KIloarc")
                 await self.reconnect_kiloarc_or_fault()
 
             # if the KiloArc error light is on, put the CSC into FAULT state

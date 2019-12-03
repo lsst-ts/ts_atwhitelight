@@ -187,8 +187,8 @@ class ChillerModel():
         self.fan3speed = 0
         self.fan4speed = 0
         self.chillerUptime = None
-        self.l1Alarms = []
-        self.l2Alarms = []
+        self.l1AlarmsPresent = []
+        self.l2AlarmsPresent = []
         self.warnings = []
 
     def __str__(self):
@@ -411,7 +411,7 @@ class ChillerModel():
                 if mask[j]:
                     alarmList.append(self.alarms.L1Alarms[i][j])
 
-        self.l1Alarms = alarmList
+        self.l1AlarmsPresent = alarmList
  
     def readAlarmStateL2_decode(self, msg):
         alarmList = []
@@ -425,7 +425,7 @@ class ChillerModel():
                     elif msg[0] == "2":
                         alarmList.append(self.alarms.L2AlarmsPt2[i+1][j])
 
-        self.l2Alarms = alarmList
+        self.l2AlarmsPresent = alarmList
 
     def readWarningState_decode(self, msg):
         warningList = []

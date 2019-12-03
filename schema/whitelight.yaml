@@ -20,7 +20,7 @@ properties:
   adam_port:
     description: port of the kiloarc's ADAM controller.
     type: number
-    default: 50000
+    default: 502
   chiller_reconnect_limit:
     description: Number of seconds to attempt to reconnect to chiller before we give up and turn off the bulb
     type: number
