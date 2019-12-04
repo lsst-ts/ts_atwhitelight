@@ -75,7 +75,7 @@ properties:
   kiloarc_status_signal_threshold:
     description: Voltage threshold for reading the kiloarc status
     type: number
-    default: 2.0
+    default: 1.0
   keep_on_chillin_timer:
     description: How many seconds to keep the chiller running after the bulb is extinguished
     type: number

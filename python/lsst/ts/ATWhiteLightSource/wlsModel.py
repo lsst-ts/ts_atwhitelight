@@ -68,7 +68,7 @@ class WhiteLightSourceModel():
         if self.simulation_mode:
             self.component = WhiteLightSourceComponentSimulator()
         else:
-            self.component = WhiteLightSourceComponent(self.config.adam_ip, self.config.adam_port)
+            self.component = WhiteLightSourceComponent(self.config.adam_ip, self.config.adam_port, config=self.config)
             self.component.reconnect()
 
     async def powerLightOn(self):

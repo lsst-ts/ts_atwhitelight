@@ -121,7 +121,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         if self.chillerModel.alarmPresent:
             raise RuntimeError("Can't enter Standby state while chiller is still reporting alarm status")
         if not self.keep_on_chillin_task.done():
-            remaining = round(self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time),0)
+            remaining = round(self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time), 0)
             raise RuntimeError(f"Can't enter Standby state; chiller must stay on for {self.config.keep_on_chillin_timer} seconds. {remaining} seconds remain.")
         
         self.telemetryLoopTask.cancel()
@@ -188,7 +188,15 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         await self.kiloarcModel.setLightPower(0)
         self.lamp_off_time = time.time()
-        self.keep_on_chillin_task = asyncio.ensure_future(asyncio.sleep(self.config.keep_on_chillin_timer))
+        self.keep_on_chillin_task = asyncio.ensure_future(self.keep_on_chillin())
+
+    async def keep_on_chillin(self):
+        await asyncio.sleep(self.config.keep_on_chillin_timer)
+        if self.summary_state == salobj.State.FAULT:
+            # if we're in fault, automatically stop the chiller once it's safe to do so.
+            await self.do_stopCooling()
+        await asyncio.sleep(5)
+
 
     async def do_setLightPower(self, id_data):
         """ Sets the light power. id_data must contain a topic that 
@@ -204,7 +212,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         await self.kiloarcModel.emergencyPowerLightOff()
         self.lamp_off_time = time.time()
-        self.keep_on_chillin_task = asyncio.ensure_future(asyncio.sleep(self.config.keep_on_chillin_timer))
+        self.keep_on_chillin_task = asyncio.ensure_future(self.keep_on_chillin())
 
     async def do_setChillerTemperature(self,id_data):
         """ Sets the target temperature for the chiller
@@ -217,6 +225,11 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 -------
                 None
         """
+        t = id_data.temperature
+        if t > self.config.chiller_high_supply_temp_warning:
+            raise salobj.ExpectedError(f"The temperature you have set is above the safe range limit of {self.config.chiller_high_supply_temp_warning}. To change this, edit the chiller_high_supply_temp_warning value in config")
+        elif t < self.config.chiller_low_supply_temp_warning:
+            raise salobj.ExpectedError(f"The temperature you have set is below the safe range limit of {self.config.chiller_low_supply_temp_warning}. To change this, edit the chiller_high_supply_temp_warning value in config")
         await self.chillerModel.setControlTemp(id_data.temperature)
         
 
@@ -245,10 +258,13 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 -------
                 None
             """
+        if self.kiloarcModel.component is not None:
+            if not self.kiloarcModel.component.client.connect():
+                raise salobj.ExpectedError("Can't stop chillin' when we're disconnected from the Kiloarc's ADAM; we don't know if the lamp is still running and in need of cooling.")
         if self.kiloarcModel.bulb_on:
-            raise salobj.ExpectedError("Can't stop chillin' while the bulb is still on.")
+            raise salobj.ExpectedError("Can't stop chillin' while the bulb is still on, or bulb state is unknown.")
         if not self.keep_on_chillin_task.done():
-            remaining = round(self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time),0)
+            remaining = round(self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time),0) + 5
             raise salobj.ExpectedError(f"Lamp was recently extinguished; can't stop chillin' for {remaining} seconds.")
         else:
             await self.chillerModel.stopChillin()
@@ -359,6 +375,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     print("Attempted emergency shutoff of light, but got error: "+ str(e))
                 print("kiloarc reporting error FAULT")
                 self.summary_state = salobj.State.FAULT
+                self.lamp_off_time = time.time()
+                self.keep_on_chillin_task = asyncio.ensure_future(self.keep_on_chillin())
                 self.detailed_state = WLSDetailedState.ERROR
             await asyncio.sleep(self.hardware_listener_interval)
         print("Kiloarc listener loop OVER")
