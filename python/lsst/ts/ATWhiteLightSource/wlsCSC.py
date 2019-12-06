@@ -2,7 +2,7 @@ __all__ = ["WhiteLightSourceCSC"]
 
 from lsst.ts import salobj
 from .wlsModel import WhiteLightSourceModel
-from .chillerModel import ChillerModel
+from .chillerModel import ChillerModel, AlarmStatus
 import pathlib
 import asyncio
 import time
@@ -69,8 +69,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
 
         self.telemetry_publish_interval = 5
         self.hardware_listener_interval = 2
-        self.chillerModel = ChillerModel()
-        self.kiloarcModel = WhiteLightSourceModel()
+        self.chillerModel = ChillerModel(self.log)
+        self.kiloarcModel = WhiteLightSourceModel(self.log)
         self.sim_mode = 0
 
         #setup asyncio tasks for the loops
@@ -111,7 +111,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             need to make sure that the hardware isn't still
             reporting errors
         """
-        print("begin_standby()")
         # don't let the user leave fault state if the KiloArc
         # or chiller is reporting an error
         if self.summary_state == salobj.State.FAULT:
@@ -119,7 +118,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 if self.kiloarcModel.component.checkStatus().redLED:
                     raise RuntimeError("Can't enter Standby state while KiloArc still reporting errors")
         if self.chillerModel.alarmPresent:
-            raise RuntimeError("Can't enter Standby state while chiller is still reporting alarm status")
+            alarmlist = self.chillerModel.l1AlarmsPresent + self.chillerModel.l2AlarmsPresent
+            raise RuntimeError(f"Can't enter Standby state while chiller is still reporting alarms: {alarmlist}")
         if not self.keep_on_chillin_task.done():
             remaining = round(self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time), 0)
             raise RuntimeError(f"Can't enter Standby state; chiller must stay on for {self.config.keep_on_chillin_timer} seconds. {remaining} seconds remain.")
@@ -135,27 +135,23 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """ Upon entering ENABLE state, we need to start 
             the telemetry and hardware listener loops.
         """
-        print("begin_enable()")
+        pass
         
 
     async def begin_start(self, id_data):
         """ Executes during the STANDBY --> DISABLED state
             transition. Confusing name, IMHO. 
         """
-        print("begin_start()")
         await super().begin_start(id_data)
         self.kiloarcModel.connect()
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
         await asyncio.wait_for(self.chillerModel.connect(self.config.chiller_ip, self.config.chiller_port), timeout=5)
         await self.apply_warnings_and_alarms()
-        print("done with start")
 
     async def begin_disable(self, id_data):
-        print("begin_disable()")
 
     async def end_standby(self, id_data):
-        print("end_standby()")
         await self.chillerModel.disconnect()
 
     async def implement_simulation_mode(self, sim_mode):
@@ -229,7 +225,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         if t > self.config.chiller_high_supply_temp_warning:
             raise salobj.ExpectedError(f"The temperature you have set is above the safe range limit of {self.config.chiller_high_supply_temp_warning}. To change this, edit the chiller_high_supply_temp_warning value in config")
         elif t < self.config.chiller_low_supply_temp_warning:
-            raise salobj.ExpectedError(f"The temperature you have set is below the safe range limit of {self.config.chiller_low_supply_temp_warning}. To change this, edit the chiller_high_supply_temp_warning value in config")
+            raise salobj.ExpectedError(f"The temperature you have set is below the safe range limit of {self.config.chiller_low_supply_temp_warning}. To change this, edit the chiller_low_supply_temp_warning value in config")
         await self.chillerModel.setControlTemp(id_data.temperature)
         
 
@@ -274,28 +270,30 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         Make sure we stop the bulb if something bad happens with the chiller
         """
         while self.interlockLoopBool:
-            print(self.summary_state)
+            # chiller alarms will take us to FAULT even if bulb is off
+            if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
+                    currentAlarms = self.chillerModel.l1AlarmsPresent + self.chillerModel.l2AlarmsPresent
+                    self.log.debug("Chiller Reporting Alarm: " + str(currentAlarms))
+                    self.fault(report="Chiller Reporting Alarm: " + str(currentAlarms))
+            # if the bulb is on and something goes wrong with chiller, e-stop the bulb. 
             if self.kiloarcModel.bulb_on:
-                if self.chillerModel.alarmPresent:
-                    print("**Alarm Present")
-                    self.fault(report="Alarm description")
+                if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
+                    self.fault()
                     await self.kiloarcModel.emergencyPowerLightOff()
                 if self.chillerModel.chillerStatus != 1:
-                    self.summary_state = salobj.State.FAULT
-                    print("**Chiller Status not RUN")
+                    self.fault()
+                    self.log.debug("Chiller Status not RUN, going FAULT and shutting down light")
                     await self.kiloarcModel.emergencyPowerLightOff()
                 if self.chillerModel.pumpStatus == 0:
-                    self.summary_state = salobj.State.FAULT
-                    print("**Chiller Pump OFF ")
+                    self.fault()
+                    self.log.debug("Chiller Pump OFF, going FAULT and shutting down light")
                     await self.kiloarcModel.emergencyPowerLightOff()
-                if self.chillerModel.reconnect_failed:
-                    self.summary_state = salobj.State.FAULT
-                    print("**Chiller disconnected")
+                if self.chillerModel.disconnected:
+                    self.fault()
+                    print("Chiller disconnected, going FAULT and shutting down light")
                     await self.kiloarcModel.emergencyPowerLightOff()
 
             await asyncio.sleep(1)
-
-
 
     async def reconnect_kiloarc_or_fault(self, max_attempts=3):
         async with self.kiloarc_com_lock:
@@ -343,7 +341,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             try:
                 async with self.kiloarc_com_lock:
                     currentState = self.kiloarcModel.component.checkStatus()
-                    print(currentState)
                 if currentState != previousState:
                     self.evt_whiteLightStatus.set_put(
                         wattageChange = float(currentState.wattage),
@@ -362,8 +359,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     self.detailed_state = WLSDetailedState.OFFLINE
                 previousState = currentState
             except Exception as e:
-                print(e)
-                print("Connection Problem with ADAM/KIloarc")
+                self.log.debug(e)
+                self.log.debug("Connection Problem with ADAM/Kiloarc")
                 await self.reconnect_kiloarc_or_fault()
 
             # if the KiloArc error light is on, put the CSC into FAULT state
@@ -372,14 +369,13 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     if self.kiloarcModel.bulb_on:
                         await self.kiloarcModel.emergencyPowerLightOff()
                 except salobj.ExpectedError as e:
-                    print("Attempted emergency shutoff of light, but got error: "+ str(e))
-                print("kiloarc reporting error FAULT")
+                    self.log.debug("Attempted emergency shutoff of light, but got error: "+ str(e))
+                self.log.debug("kiloarc reporting error FAULT")
                 self.summary_state = salobj.State.FAULT
                 self.lamp_off_time = time.time()
                 self.keep_on_chillin_task = asyncio.ensure_future(self.keep_on_chillin())
                 self.detailed_state = WLSDetailedState.ERROR
             await asyncio.sleep(self.hardware_listener_interval)
-        print("Kiloarc listener loop OVER")
 
     async def telemetryLoop(self):
         """ Publish WLS Telemetry. This includes:
@@ -416,7 +412,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.tel_bulbWatthour.set_put(bulbhour=float(self.kiloarcModel.component.bulbWattHours))
 
             # Chiller Telemetry
-            print(str(self.chillerModel))
             self.tel_chillerFansSpeed.set(fan1Speed=int(self.chillerModel.fan1speed))
             self.tel_chillerFansSpeed.set(fan2Speed=int(self.chillerModel.fan2speed))
             self.tel_chillerFansSpeed.set(fan3Speed=int(self.chillerModel.fan3speed))
@@ -508,11 +503,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 self.last_warning_state["Low Ambient Temp Warning"] = False
 
             await asyncio.sleep(self.telemetry_publish_interval)
-        print("Telemetry loop OVER")
 
     async def close(self):
-        print("Running CLOSE")
-        
         self.interlockLoopBool = False
         self.telemetryLoopBool = False
         self.kiloarcListenerLoopBool = False

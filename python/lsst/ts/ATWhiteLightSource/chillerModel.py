@@ -119,9 +119,10 @@ class Alarms():
 
 
 class ChillerModel():
-    def __init__(self):
+    def __init__(self, log):
 
         self.config = None
+        self.log = log
         self.device_id = "01"
         self.alarms = Alarms()
         self.response_dict = {
@@ -157,7 +158,7 @@ class ChillerModel():
         }
 
         self.q = PriorityQueue()
-        self.reconnect_failed = False 
+        self.disconnected = False 
         self.component = None
         self.cpe = ChillerPacketEncoder()
         self.watchdogLoopBool = False
@@ -219,7 +220,7 @@ class ChillerModel():
         if sim_mode:
             self.component = FakeChillerComponent(ip, port, self.chiller_com_lock)
         else:
-            self.component = ChillerComponent(ip, port, self.chiller_com_lock)
+            self.component = ChillerComponent(ip, port, self.chiller_com_lock, self.log)
         await self.component.connect()
         self.watchdogLoopBool = True
         self.queueLoopBool = True
@@ -281,7 +282,6 @@ class ChillerModel():
         msg = str(msg)
         checksum = msg[-5:-3]
         msg = msg[2:-5]
-        print(msg)
 
         # compute checksum
         total = 0x0
@@ -294,13 +294,13 @@ class ChillerModel():
 
         # process the string
         if msg[0] != "#":
-            print("uh oh, this doesn't look like a chiller response")
+            self.log.debug(f"uh oh, {msg} doesn't look like a proper chiller response")
         cmd_id = msg[3:5]
         error = msg[5]
         data = msg[14:]
         response_method = self.response_dict[cmd_id]
 
-        print("cmd_id: " + str(cmd_id) + "; error: " + str(error) + "; data: " + str(data) + "; checksum: "
+        self.log.debug("received chiller packet: cmd_id: " + str(cmd_id) + "; error: " + str(error) + "; data: " + str(data) + "; checksum: "
               + str(checksum_from_chiller) + "; response method: " + str(response_method.__name__))
 
         # special case for fans: msg[13] is the fan number. 
@@ -364,7 +364,6 @@ class ChillerModel():
         return(cur)
 
     def readSetTemp_decode(self, msg):
-        print(msg)
         self.setTemp = self.tempParser(msg)
 
     def readSupplyTemp_decode(self, msg):
@@ -467,7 +466,6 @@ class ChillerModel():
         it can only accept 1 TCP message per second, which is clearly not the case, but we're sticking to their 
         specs anyway...
         """
-        print("Starting queue loop")
         while self.queueLoopBool:
             if self.q.empty():
                 self.q.put((2, self.cpe.readFanSpeed(1)))
@@ -486,18 +484,12 @@ class ChillerModel():
 
             pop = self.q.get()
             try:
-                resp = await self.component.send_command(pop[1])
+                command = pop[1]
+                resp = await self.component.send_command(command)
             except asyncio.TimeoutError:
-                print("Timeout Happened")
+                self.log.debug(f"Timed out waiting for response from Chiller to {str(command)}")
                 await self.component.disconnect()
-                print("component disconnected")
-                try:
-                    await self.reconnect_loop()
-                except Exception as e:
-                    print(e)
-                if self.component.connected:
-                    print("we're reconnected (model)")
-                else: self.disconnected = True
+                self.disconnected = True
 
 
             #all actions taken in response to messages from the chiller are handled by responder
@@ -515,6 +507,7 @@ class ChillerModel():
             await asyncio.sleep(7)
 
     async def reconnect_loop(self, timelimit=120):
+        """this method is unused currently, couldn't get it working for some reason"""
 
         endTime = time.time() + timelimit
         print("starting chiller reconnect")

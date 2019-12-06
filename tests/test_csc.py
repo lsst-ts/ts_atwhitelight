@@ -7,7 +7,7 @@ from lsst.ts import salobj
 from lsst.ts import ATWhiteLightSource
 from random import randrange
 
-STD_TIMEOUT = 5  # standard command timeout (sec)
+STD_TIMEOUT = 15  # standard command timeout (sec)
 
 
 class Harness:
