@@ -161,7 +161,7 @@ class ChillerModel():
         self.disconnected = False 
         self.component = None
         self.cpe = ChillerPacketEncoder()
-        self.watchdogLoopBool = False
+        self.run_watchdog = False
         self.queueLoopBool = False
         self.queue_task = None
         self.watchdog_task = None
@@ -222,7 +222,7 @@ class ChillerModel():
         else:
             self.component = ChillerComponent(ip, port, self.chiller_com_lock, self.log)
         await self.component.connect()
-        self.watchdogLoopBool = True
+        self.run_watchdog = True
         self.queueLoopBool = True
         self.disconnected = False
         self.queue_task = asyncio.ensure_future(self.queueloop())
@@ -232,7 +232,7 @@ class ChillerModel():
         """
         disconnect from chiller and halt loops
         """
-        self.watchdogLoopBool = False
+        self.run_watchdog = False
         self.queueLoopBool = False
         await asyncio.sleep(1)
         if self.queue_task is not None:
@@ -502,7 +502,7 @@ class ChillerModel():
         are any warnings or alerts, so we check it more frequently than other telemetry.
         """
 
-        while self.watchdogLoopBool:
+        while self.run_watchdog:
             self.q.put((1, self.cpe.watchdog()))
             await asyncio.sleep(7)
 
@@ -510,31 +510,30 @@ class ChillerModel():
         """this method is unused currently, couldn't get it working for some reason"""
 
         endTime = time.time() + timelimit
-        print("starting chiller reconnect")
+        self.log.debug("starting chiller reconnect")
         async with self.chiller_com_lock:
-            print("reconnect COM LOCK starts")
+            self.log.debug("reconnect COM LOCK starts")
         
             while time.time() < endTime:
                 await asyncio.sleep(1)
-                print("attempting reconnect" + str(endTime - time.time()))
-                print(self.component.connected)
+                self.log.debug("attempting reconnect" + str(endTime - time.time()))
                 if self.component.connected:
-                    print("SUCCESS??")
+                    self.log.debug("SUCCESS??")
                     break
                 else:
                     try:
                         await self.disconnect()
                         await self.connect(self.config.chiller_ip, self.config.chiller_port)
-                        print("\tconnected!")
+                        self.log.debug("\tconnected!")
                     except asyncio.TimeoutError:
-                        print("TIMED OUT")
+                        self.log.debug("TIMED OUT")
                     except TimeoutError:
-                        print("passed timeout exception")
+                        self.log.debug("passed timeout exception")
                     except Exception as e:
-                        print("passed another exception")
-                        print(e)
-            print("reconnect COM LOCK ends")
-        print("COULDNT RECON")
+                        self.log.debug("passed another exception")
+                        self.log.debug(e)
+            self.log.debug("reconnect COM LOCK ends")
+        self.log.debug("COULDNT RECON")
             
 
 

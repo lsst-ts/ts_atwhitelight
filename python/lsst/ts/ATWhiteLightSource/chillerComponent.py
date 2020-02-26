@@ -24,12 +24,7 @@ class ChillerComponent(object):
             raise RuntimeError("Already connected")
 
         self.log.debug("about to connect to chiller at"+str(self.ip))
-        try:
-            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.ip, self.port), self.timeout)
-        except Exception as e:
-            logging.exception(e)
-            self.log.debug(e)
-            raise e
+        self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.ip, self.port), self.timeout)
 
     async def disconnect(self):   
         if self.writer is not None:
