@@ -409,7 +409,6 @@ class ChillerModel():
             for j in range(4):
                 if mask[j]:
                     alarmList.append(self.alarms.L1Alarms[i][j])
-
         self.l1AlarmsPresent = alarmList
  
     def readAlarmStateL2_decode(self, msg):
@@ -423,7 +422,6 @@ class ChillerModel():
                         alarmList.append(self.alarms.L2AlarmsPt1[i+1][j])
                     elif msg[0] == "2":
                         alarmList.append(self.alarms.L2AlarmsPt2[i+1][j])
-
         self.l2AlarmsPresent = alarmList
 
     def readWarningState_decode(self, msg):
@@ -534,8 +532,6 @@ class ChillerModel():
                         self.log.debug(e)
             self.log.debug("reconnect COM LOCK ends")
         self.log.debug("COULDNT RECON")
-            
-
 
     def _sorter(self, num):
         """

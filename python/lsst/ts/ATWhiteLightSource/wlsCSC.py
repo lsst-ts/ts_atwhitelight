@@ -76,10 +76,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         #setup asyncio tasks for the loops
         done_task = asyncio.Future()
         done_task.set_result(None)
-        self.telemetryLoopTask = done_task
+        self.telemetryLoopTask = done_task.
         self.kiloarcListenerTask = done_task
-
-
+        
         self.keep_on_chillin_task = done_task
         self.lamp_off_time = None
 
@@ -100,6 +99,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         return("ts_config_atcalsys")
 
     async def configure(self, config):
+        print('csc config')
         self.config = config
         self.chillerModel.config = config
         self.kiloarcModel.config = config
@@ -142,6 +142,10 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
     async def begin_disable(self, id_data):
 
     async def end_standby(self, id_data):
+        await self.chillerModel.disconnect()
+
+    async def end_standby(self, id_data):
+        print("end_standby()")
         await self.chillerModel.disconnect()
 
     async def implement_simulation_mode(self, sim_mode):
@@ -407,6 +411,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.tel_chillerFansSpeed.set(fan2Speed=int(self.chillerModel.fan2speed))
             self.tel_chillerFansSpeed.set(fan3Speed=int(self.chillerModel.fan3speed))
             self.tel_chillerFansSpeed.set(fan4Speed=int(self.chillerModel.fan4speed))
+            self.tel_chillerFansSpeed.set(timestamp=time.time())
             self.tel_chillerFansSpeed.put()
 
             if self.chillerModel.chillerUptime is not None:
@@ -426,7 +431,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             if self.chillerModel.processFlow is not None:
                 self.tel_chillerProcessFlow.set(flow=self.chillerModel.processFlow)
             self.tel_chillerProcessFlow.put()
-
             if self.chillerModel.tecBank1 is not None:
                 self.tel_chillerTECBankCurrent.set(bank1Current=self.chillerModel.tecBank1)
             if self.chillerModel.tecBank2 is not None:
@@ -435,6 +439,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
 
             if self.chillerModel.teDrivePct is not None:
                 self.tel_chillerTEDriveLevel.set(chillerTEDriveLevel=self.chillerModel.teDrivePct) 
+
             self.tel_chillerTEDriveLevel.put()
 
             # Chiller Events
@@ -484,7 +489,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 self.evt_chillerLowAmbientTempWarning.set_put(warning=True)
                 self.last_warning_state["Low Ambient Temp Warning"] = True
             elif "Low Ambient Temp Warning" in self.last_warning_state and self.last_warning_state["Low Ambient Temp Warning"]:
-                self.evt_chillerLowAmbientTempWarning.set_put(warning=False)
+                self.evt_chillerLowAmbientTempWarning.set_put(warning=False)6 d
                 self.last_warning_state["Low Ambient Temp Warning"] = False
 
             await asyncio.sleep(self.telemetry_publish_interval)
