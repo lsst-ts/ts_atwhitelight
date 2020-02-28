@@ -190,6 +190,8 @@ class ChillerModel():
         self.chillerUptime = None
         self.l1AlarmsPresent = []
         self.l2AlarmsPresent = []
+        self.l1AlarmsHex = None
+        self.l2AlarmsHex = None
         self.warnings = []
 
     def __str__(self):
@@ -402,6 +404,7 @@ class ChillerModel():
         self.setTemp = self.tempParser(msg)
 
     def readAlarmStateL1_decode(self, msg):
+        self.l1AlarmsHex = msg
         alarmList = []
         for i in range(6):
             val = int(msg[i], 16)
@@ -413,6 +416,7 @@ class ChillerModel():
         self.l1AlarmsPresent = alarmList
  
     def readAlarmStateL2_decode(self, msg):
+        self.l2AlarmsHex = msg
         alarmList = []
         for i in range(8):
             val = int(msg[i+1], 16)
@@ -437,16 +441,14 @@ class ChillerModel():
 
         self.warnings = warningList
 
-
     def setWarning_decode(self, msg):
         pass
 
     def setAlarm_decode(self, msg):
         pass
 
-    def readUptime_decode(self,msg):
+    def readUptime_decode(self, msg):
         self.chillerUptime = int(msg)
-
 
     def readFanSpeed_decode(self, fanNum, msg):
         if fanNum == 1:
