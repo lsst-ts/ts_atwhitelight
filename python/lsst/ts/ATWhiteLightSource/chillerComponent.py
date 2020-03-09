@@ -5,10 +5,11 @@ import time
 
 
 class ChillerComponent(object):
-    def __init__(self, ip, port, com_lock):
+    def __init__(self, ip, port, com_lock, log=None):
         self.ip = ip
         self.port = port
         self.connect_task = None
+        self.log = None
         self.reader = None
         self.writer = None
         self.timeout = 15
@@ -21,15 +22,8 @@ class ChillerComponent(object):
         # self.log.debug(f"connecting to: {self.ip}:{self.port}.")
         if self.connected:
             raise RuntimeError("Already connected")
-
-        print("about to connect to "+str(self.ip))
-        try:
-            self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.ip, self.port), self.timeout)
-        except Exception as e:
-            logging.exception(e)
-            print(e)
-            raise e
-        print("done connecting")
+        self.log.debug("about to connect to chiller at"+str(self.ip))
+        self.reader, self.writer = await asyncio.wait_for(asyncio.open_connection(self.ip, self.port), self.timeout)
 
     async def disconnect(self):   
         if self.writer is not None:

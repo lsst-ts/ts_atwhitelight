@@ -34,10 +34,11 @@ class WhiteLightSourceComponent():
 
     """
 
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, config):
         self.client = None
         self.clientip = ip
         self.clientport = port
+        self.config = config
         self.bulbHours = 0  # Read this from EFD when we initialize
         self.bulbWattHours = 0  # This too
         self.bulbCount = 0  # how many bulbs have there been in total?
@@ -90,7 +91,7 @@ class WhiteLightSourceComponent():
         KiloArcStatus = namedtuple('KiloArcStatus', ['wattage','greenLED','blueLED','redLED','errorLED'])
         
         voltages = self._readVoltage()
-        cutoff = 2.0
+        cutoff = self.config.kiloarc_status_signal_threshold
         
         status = KiloArcStatus(self.bulbState, voltages[0] > cutoff, voltages[1] > cutoff,\
             voltages[2] > cutoff, voltages[3] > cutoff)

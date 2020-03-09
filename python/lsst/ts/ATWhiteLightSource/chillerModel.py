@@ -119,9 +119,10 @@ class Alarms():
 
 
 class ChillerModel():
-    def __init__(self):
+    def __init__(self, log):
 
         self.config = None
+        self.log = log
         self.device_id = "01"
         self.alarms = Alarms()
         self.response_dict = {
@@ -157,10 +158,10 @@ class ChillerModel():
         }
 
         self.q = PriorityQueue()
-        self.reconnect_failed = False 
+        self.disconnected = False 
         self.component = None
         self.cpe = ChillerPacketEncoder()
-        self.watchdogLoopBool = False
+        self.run_watchdog = False
         self.queueLoopBool = False
         self.queue_task = None
         self.watchdog_task = None
@@ -187,8 +188,10 @@ class ChillerModel():
         self.fan3speed = 0
         self.fan4speed = 0
         self.chillerUptime = None
-        self.l1Alarms = []
-        self.l2Alarms = []
+        self.l1AlarmsPresent = []
+        self.l2AlarmsPresent = []
+        self.l1AlarmsHex = None
+        self.l2AlarmsHex = None
         self.warnings = []
 
     def __str__(self):
@@ -219,9 +222,9 @@ class ChillerModel():
         if sim_mode:
             self.component = FakeChillerComponent(ip, port, self.chiller_com_lock)
         else:
-            self.component = ChillerComponent(ip, port, self.chiller_com_lock)
+            self.component = ChillerComponent(ip, port, self.chiller_com_lock, self.log)
         await self.component.connect()
-        self.watchdogLoopBool = True
+        self.run_watchdog = True
         self.queueLoopBool = True
         self.disconnected = False
         self.queue_task = asyncio.ensure_future(self.queueloop())
@@ -231,7 +234,7 @@ class ChillerModel():
         """
         disconnect from chiller and halt loops
         """
-        self.watchdogLoopBool = False
+        self.run_watchdog = False
         self.queueLoopBool = False
         await asyncio.sleep(1)
         if self.queue_task is not None:
@@ -281,7 +284,6 @@ class ChillerModel():
         msg = str(msg)
         checksum = msg[-5:-3]
         msg = msg[2:-5]
-        print(msg)
 
         # compute checksum
         total = 0x0
@@ -294,13 +296,13 @@ class ChillerModel():
 
         # process the string
         if msg[0] != "#":
-            print("uh oh, this doesn't look like a chiller response")
+            self.log.debug(f"uh oh, {msg} doesn't look like a proper chiller response")
         cmd_id = msg[3:5]
         error = msg[5]
         data = msg[14:]
         response_method = self.response_dict[cmd_id]
 
-        print("cmd_id: " + str(cmd_id) + "; error: " + str(error) + "; data: " + str(data) + "; checksum: "
+        self.log.debug("received chiller packet: cmd_id: " + str(cmd_id) + "; error: " + str(error) + "; data: " + str(data) + "; checksum: "
               + str(checksum_from_chiller) + "; response method: " + str(response_method.__name__))
 
         # special case for fans: msg[13] is the fan number. 
@@ -364,7 +366,6 @@ class ChillerModel():
         return(cur)
 
     def readSetTemp_decode(self, msg):
-        print(msg)
         self.setTemp = self.tempParser(msg)
 
     def readSupplyTemp_decode(self, msg):
@@ -403,6 +404,7 @@ class ChillerModel():
         self.setTemp = self.tempParser(msg)
 
     def readAlarmStateL1_decode(self, msg):
+        self.l1AlarmsHex = msg
         alarmList = []
         for i in range(6):
             val = int(msg[i], 16)
@@ -410,10 +412,10 @@ class ChillerModel():
             for j in range(4):
                 if mask[j]:
                     alarmList.append(self.alarms.L1Alarms[i][j])
-
-        self.l1Alarms = alarmList
+        self.l1AlarmsPresent = alarmList
  
     def readAlarmStateL2_decode(self, msg):
+        self.l2AlarmsHex = msg
         alarmList = []
         for i in range(8):
             val = int(msg[i+1], 16)
@@ -424,8 +426,7 @@ class ChillerModel():
                         alarmList.append(self.alarms.L2AlarmsPt1[i+1][j])
                     elif msg[0] == "2":
                         alarmList.append(self.alarms.L2AlarmsPt2[i+1][j])
-
-        self.l2Alarms = alarmList
+        self.l2AlarmsPresent = alarmList
 
     def readWarningState_decode(self, msg):
         warningList = []
@@ -438,16 +439,14 @@ class ChillerModel():
 
         self.warnings = warningList
 
-
     def setWarning_decode(self, msg):
         pass
 
     def setAlarm_decode(self, msg):
         pass
 
-    def readUptime_decode(self,msg):
+    def readUptime_decode(self, msg):
         self.chillerUptime = int(msg)
-
 
     def readFanSpeed_decode(self, fanNum, msg):
         if fanNum == 1:
@@ -467,7 +466,6 @@ class ChillerModel():
         it can only accept 1 TCP message per second, which is clearly not the case, but we're sticking to their 
         specs anyway...
         """
-        print("Starting queue loop")
         while self.queueLoopBool:
             if self.q.empty():
                 self.q.put((2, self.cpe.readFanSpeed(1)))
@@ -486,18 +484,12 @@ class ChillerModel():
 
             pop = self.q.get()
             try:
-                resp = await self.component.send_command(pop[1])
+                command = pop[1]
+                resp = await self.component.send_command(command)
             except asyncio.TimeoutError:
-                print("Timeout Happened")
+                self.log.debug(f"Timed out waiting for response from Chiller to {str(command)}")
                 await self.component.disconnect()
-                print("component disconnected")
-                try:
-                    await self.reconnect_loop()
-                except Exception as e:
-                    print(e)
-                if self.component.connected:
-                    print("we're reconnected (model)")
-                else: self.disconnected = True
+                self.disconnected = True
 
 
             #all actions taken in response to messages from the chiller are handled by responder
@@ -510,40 +502,38 @@ class ChillerModel():
         are any warnings or alerts, so we check it more frequently than other telemetry.
         """
 
-        while self.watchdogLoopBool:
+        while self.run_watchdog:
             self.q.put((1, self.cpe.watchdog()))
             await asyncio.sleep(7)
 
     async def reconnect_loop(self, timelimit=120):
+        """this method is unused currently, couldn't get it working for some reason"""
 
         endTime = time.time() + timelimit
-        print("starting chiller reconnect")
+        self.log.debug("starting chiller reconnect")
         async with self.chiller_com_lock:
-            print("reconnect COM LOCK starts")
+            self.log.debug("reconnect COM LOCK starts")
         
             while time.time() < endTime:
                 await asyncio.sleep(1)
-                print("attempting reconnect" + str(endTime - time.time()))
-                print(self.component.connected)
+                self.log.debug("attempting reconnect" + str(endTime - time.time()))
                 if self.component.connected:
-                    print("SUCCESS??")
+                    self.log.debug("SUCCESS??")
                     break
                 else:
                     try:
                         await self.disconnect()
                         await self.connect(self.config.chiller_ip, self.config.chiller_port)
-                        print("\tconnected!")
+                        self.log.debug("\tconnected!")
                     except asyncio.TimeoutError:
-                        print("TIMED OUT")
+                        self.log.debug("TIMED OUT")
                     except TimeoutError:
-                        print("passed timeout exception")
+                        self.log.debug("passed timeout exception")
                     except Exception as e:
-                        print("passed another exception")
-                        print(e)
-            print("reconnect COM LOCK ends")
-        print("COULDNT RECON")
-            
-
+                        self.log.debug("passed another exception")
+                        self.log.debug(e)
+            self.log.debug("reconnect COM LOCK ends")
+        self.log.debug("COULDNT RECON")
 
     def _sorter(self, num):
         """

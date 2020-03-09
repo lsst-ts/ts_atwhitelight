@@ -16,11 +16,11 @@ properties:
   adam_ip:
     description: IP of the kiloarc's ADAM controller.
     type: string
-    default: "140.252.33.138"
+    default: "140.252.33.160"
   adam_port:
     description: port of the kiloarc's ADAM controller.
     type: number
-    default: 50000
+    default: 502
   chiller_reconnect_limit:
     description: Number of seconds to attempt to reconnect to chiller before we give up and turn off the bulb
     type: number
@@ -63,7 +63,8 @@ properties:
   chiller_high_ambient_temp_alarm:
     description: DegC threshold for going to fault state and shutting down the lamp due to high ambient temp
     type: number
-    default: 50
+
+    default: 45
   chiller_low_ambient_temp_alarm:
     description: DegC threshold for going to fault state and shutting down the lamp due to low ambient temp
     type: number
@@ -72,3 +73,11 @@ properties:
     description: Liters per minute threshold for going to fault state and shutting down the lamp due to low process flow
     type: number
     default: 0.3
+  kiloarc_status_signal_threshold:
+    description: Voltage threshold for reading the kiloarc status
+    type: number
+    default: 1.0
+  keep_on_chillin_timer:
+    description: How many seconds to keep the chiller running after the bulb is extinguished
+    type: number
+    default: 900

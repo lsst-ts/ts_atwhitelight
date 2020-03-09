@@ -7,7 +7,7 @@ from lsst.ts import salobj
 from lsst.ts import ATWhiteLightSource
 from random import randrange
 
-STD_TIMEOUT = 5  # standard command timeout (sec)
+STD_TIMEOUT = 15  # standard command timeout (sec)
 
 
 class Harness:
@@ -38,6 +38,7 @@ class CscTestCase(asynctest.TestCase):
     async def test_setChillerTemp(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
             target_temp = randrange(18, 20)
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b'.0103rSetTemp26\r': b'#01030rSetTemp+019040\r',
                 b'.0117sCtrlTmp+019025\r': b'#01170sCtrlTmp+01904A\r',
@@ -53,6 +54,7 @@ class CscTestCase(asynctest.TestCase):
     async def testPowerOn(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
             harness.csc.kiloarcModel.warmupPeriod = 1
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b'.0103rSetTemp26\r': b'#01030rSetTemp+019040\r',
                 b'.0115sStatus_17c\r': b'#01150sStatus_1A1\r',
@@ -72,6 +74,7 @@ class CscTestCase(asynctest.TestCase):
 
     async def testPowerOff(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b'.0103rSetTemp26\r': b'#01030rSetTemp+019040\r',
                 b'.0115sStatus_17c\r': b'#01150sStatus_1A1\r',
@@ -105,6 +108,7 @@ class CscTestCase(asynctest.TestCase):
         """
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
             harness.csc.kiloarcModel.warmupPeriod = 15
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b'.0103rSetTemp26\r': b'#01030rSetTemp+01803F\r',
                 b'.0115sStatus_17c\r': b'#01150sStatus_1A1\r',
@@ -134,6 +138,7 @@ class CscTestCase(asynctest.TestCase):
     async def testSetPowerTooHigh(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
             harness.csc.kiloarcModel.warmupPeriod = 15
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b'.0103rSetTemp26\r': b'#01030rSetTemp+01803F\r',
                 b'.0115sStatus_17c\r': b'#01150sStatus_1A1\r',
@@ -165,6 +170,7 @@ class CscTestCase(asynctest.TestCase):
     
     async def testCantSetPowerWithBulbOff(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b'.0103rSetTemp26\r': b'#01030rSetTemp+01803F\r',
                 b'.0115sStatus_17c\r': b'#01150sStatus_1A1\r',
@@ -188,6 +194,7 @@ class CscTestCase(asynctest.TestCase):
 
     async def testCantPowerOnDuringCooldownPeriod(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b'.0103rSetTemp26\r': b'#01030rSetTemp+01803F\r',
                 b'.0115sStatus_17c\r': b'#01150sStatus_1A1\r',
@@ -226,6 +233,7 @@ class CscTestCase(asynctest.TestCase):
 
     async def testCantPowerOffDuringWarmupPeriod(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b'.0103rSetTemp26\r': b'#01030rSetTemp+01803F\r',
                 b'.0115sStatus_17c\r': b'#01150sStatus_1A1\r',
@@ -256,6 +264,7 @@ class CscTestCase(asynctest.TestCase):
 
     async def testEmergencyPowerLightOff(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b'.0103rSetTemp26\r': b'#01030rSetTemp+01803F\r',
                 b'.0115sStatus_17c\r': b'#01150sStatus_1A1\r',
@@ -294,6 +303,7 @@ class CscTestCase(asynctest.TestCase):
 
     async def testCantStopChillingWithBulbOn(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b'.0103rSetTemp26\r': b'#01030rSetTemp+01803F\r',
                 b'.0115sStatus_17c\r': b'#01150sStatus_1A1\r',
@@ -315,6 +325,7 @@ class CscTestCase(asynctest.TestCase):
 
     async def testBulbStopsWhenChillerDisconnected(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
+            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b'.0103rSetTemp26\r': b'#01030rSetTemp+01803F\r',
                 b'.0115sStatus_17c\r': b'#01150sStatus_1A1\r',
