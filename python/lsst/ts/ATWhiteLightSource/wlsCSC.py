@@ -76,7 +76,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         #setup asyncio tasks for the loops
         done_task = asyncio.Future()
         done_task.set_result(None)
-        self.telemetryLoopTask = done_task.
+        self.telemetryLoopTask = done_task
         self.kiloarcListenerTask = done_task
         
         self.keep_on_chillin_task = done_task
