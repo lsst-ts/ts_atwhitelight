@@ -259,7 +259,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         while self.interlockLoopBool:
             # concatenate a  string of the hex codes for alarms directly from chiller
-            alarmHex = str(chillerModel.l1AlarmsHex) + str(ChillerModel.l2AlarmsHex)
+            alarmHex = str(self.chillerModel.l1AlarmsHex) + str(self.chillerModel.l2AlarmsHex)
             # chiller alarms will take us to FAULT even if bulb is off
             if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
                 currentAlarms = self.chillerModel.l1AlarmsPresent + self.chillerModel.l2AlarmsPresent
@@ -484,7 +484,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 self.evt_chillerLowAmbientTempWarning.set_put(warning=True)
                 self.last_warning_state["Low Ambient Temp Warning"] = True
             elif "Low Ambient Temp Warning" in self.last_warning_state and self.last_warning_state["Low Ambient Temp Warning"]:
-                self.evt_chillerLowAmbientTempWarning.set_put(warning=False)6 d
+                self.evt_chillerLowAmbientTempWarning.set_put(warning=False)
                 self.last_warning_state["Low Ambient Temp Warning"] = False
 
             await asyncio.sleep(self.telemetry_publish_interval)

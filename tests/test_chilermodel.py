@@ -1,4 +1,4 @@
-from chillerModel import ChillerModel
+from lsst.ts.ATWhiteLightSource.chillerModel import ChillerModel
 import unittest
 import asyncio
 
