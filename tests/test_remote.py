@@ -10,13 +10,15 @@ from lsst.ts.ATWhiteLightSource.wlsCSC import WhiteLightSourceCSC
 
 class WhiteLightSourceRemoteTests(unittest.TestCase):
     def setUp(self):
-        self.csc = WhiteLightSourceCSC(initial_simulation_mode = 0)
+        self.csc = WhiteLightSourceCSC(simulation_mode=1)
         self.csc.summary_state = salobj.State.ENABLED
 
         # set short cooldown and warmup periods so the tests don't take hours
         self.csc.kiloarcModel.cooldownPeriod = 3
         self.csc.kiloarcModel.warmupPeriod = 3
-        self.remote = salobj.Remote(domain=self.csc.domain, name="ATWhiteLight", index=0)
+        self.remote = salobj.Remote(
+            domain=self.csc.domain, name="ATWhiteLight", index=0
+        )
 
     def testPowerOnOff(self):
         """
@@ -29,15 +31,20 @@ class WhiteLightSourceRemoteTests(unittest.TestCase):
 
             powerOn_topic = self.remote.cmd_powerLightOn.DataType()
             powerOn_topic.power = True
-            ontask = asyncio.ensure_future(self.remote.cmd_powerLightOn.start(powerOn_topic, timeout))
+            ontask = asyncio.ensure_future(
+                self.remote.cmd_powerLightOn.start(powerOn_topic, timeout)
+            )
             onresult = await ontask
             assert onresult.ack.result == "Done"
             powerOff_topic = self.remote.cmd_powerLightOff.DataType()
             powerOff_topic.power = False
             time.sleep(3)
-            offtask = asyncio.ensure_future(self.remote.cmd_powerLightOff.start(powerOff_topic, timeout))
+            offtask = asyncio.ensure_future(
+                self.remote.cmd_powerLightOff.start(powerOff_topic, timeout)
+            )
             offoutput = await offtask
             assert offoutput.ack.result == "Done"
+
         asyncio.get_event_loop().run_until_complete(doit())
 
     def testCantPowerOffDuringWarmup(self):
@@ -52,14 +59,19 @@ class WhiteLightSourceRemoteTests(unittest.TestCase):
 
             powerOn_topic = self.remote.cmd_powerLightOn.DataType()
             powerOn_topic.power = True
-            ontask = asyncio.ensure_future(self.remote.cmd_powerLightOn.start(powerOn_topic, timeout))
+            ontask = asyncio.ensure_future(
+                self.remote.cmd_powerLightOn.start(powerOn_topic, timeout)
+            )
             onresult = await ontask
             assert onresult.ack.result == "Done"
             powerOff_topic = self.remote.cmd_powerLightOff.DataType()
             powerOff_topic.power = False
             with test_utils.assertRaisesAckError(ack=-302):
-                offtask = asyncio.ensure_future(self.remote.cmd_powerLightOff.start(powerOff_topic, timeout))
+                offtask = asyncio.ensure_future(
+                    self.remote.cmd_powerLightOff.start(powerOff_topic, timeout)
+                )
                 await offtask
+
         asyncio.get_event_loop().run_until_complete(doit())
 
 

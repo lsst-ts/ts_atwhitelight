@@ -8,10 +8,10 @@ from .wlsSimComponent import WhiteLightSourceComponentSimulator
 from lsst.ts import salobj
 
 
-class WhiteLightSourceModel():
-    """ 
+class WhiteLightSourceModel:
+    """
     The White Light Source Model. This keeps track of the state of
-    the Kiloarc, and enforces cooldown and warmup periods. 
+    the Kiloarc, and enforces cooldown and warmup periods.
 
     Attributes
     ----------
@@ -42,7 +42,7 @@ class WhiteLightSourceModel():
     warmupPeriod : float
         how long do we wait after turing on before we can turn back off
     """
-    
+
     def __init__(self, ip=None, port=None):
         self.ip = ip
         self.port = port
@@ -68,22 +68,25 @@ class WhiteLightSourceModel():
         if self.simulation_mode:
             self.component = WhiteLightSourceComponentSimulator()
         else:
-            self.component = WhiteLightSourceComponent(self.config.adam_ip, self.config.adam_port, config=self.config)
+            self.component = WhiteLightSourceComponent(
+                self.config.adam_ip, self.config.adam_port, config=self.config
+            )
             self.component.reconnect()
+        print("finished connecting")
 
     async def powerLightOn(self):
-        """ Signals the Horiba KiloArc to power light on.
-            We always set the brightness to self.startupWattage for a
-            moment (self.startupTime), then step it back down to the
-            default.
+        """Signals the Horiba KiloArc to power light on.
+        We always set the brightness to self.startupWattage for a
+        moment (self.startupTime), then step it back down to the
+        default.
 
-            Parameters
-            ----------
-            None
+        Parameters
+        ----------
+        None
 
-            Returns
-            -------
-            None
+        Returns
+        -------
+        None
         """
         if not self.cooldown_task.done():  # are we in the cooldown period?
             elapsed = time.time() - self.off_time
@@ -101,28 +104,28 @@ class WhiteLightSourceModel():
         self.component.setLightPower(self.defaultWattage)
 
     async def setLightPower(self, watts):
-        """ Sets the brightness (in watts) on the white light source.
-            There are lots of constraints.
-            1 When we turn the bulb on (>800w) we aren't allowed to turn
-              it off for 15m because the Hg inside needs to fully evaporate
-              But we can overrride.
-            2 When we turn the bulb off, we need to wait 15m for the Hg to
-              recondense before we can turn it on again.
-            3 When we turn on, we go to maximum brightness for 2 seconds and
-              then drop back down.
-            4 1200w is the maximum brightness, and requesting higher will
-              produce an error.
-            5 800w is the minimum, and requesting lower is the same as
-              requesting to power off.
+        """Sets the brightness (in watts) on the white light source.
+        There are lots of constraints.
+        1 When we turn the bulb on (>800w) we aren't allowed to turn
+          it off for 15m because the Hg inside needs to fully evaporate
+          But we can overrride.
+        2 When we turn the bulb off, we need to wait 15m for the Hg to
+          recondense before we can turn it on again.
+        3 When we turn on, we go to maximum brightness for 2 seconds and
+          then drop back down.
+        4 1200w is the maximum brightness, and requesting higher will
+          produce an error.
+        5 800w is the minimum, and requesting lower is the same as
+          requesting to power off.
 
-            Parameters
-            ----------
-            watts : int or float
-                Should be <= 1200. Values under 800 power the light off entirely.
+        Parameters
+        ----------
+        watts : int or float
+            Should be <= 1200. Values under 800 power the light off entirely.
 
-            Returns
-            -------
-            None
+        Returns
+        -------
+        None
         """
         # TODO: report watts as telemetry (or events?)
         if watts > 1200:
@@ -134,9 +137,11 @@ class WhiteLightSourceModel():
                 elapsed = time.time() - self.on_time
                 remaining = round(self.warmupPeriod - elapsed, 1)
                 raise salobj.ExpectedError(description + str(remaining) + " seconds.")
-                
+
             if self.bulb_on:
-                self.cooldown_task = asyncio.ensure_future(asyncio.sleep(self.cooldownPeriod))
+                self.cooldown_task = asyncio.ensure_future(
+                    asyncio.sleep(self.cooldownPeriod)
+                )
                 self.component.setLightPower(0)
                 self.bulb_on = False
                 self.off_time = time.time()
@@ -145,7 +150,9 @@ class WhiteLightSourceModel():
         else:
             # this executes when watts are inside the 800-1200 range
             if not self.bulb_on:
-                raise salobj.ExpectedError("You must turn the light on before setting light power.")
+                raise salobj.ExpectedError(
+                    "You must turn the light on before setting light power."
+                )
             if not self.on_task.done():
                 await self.on_task
                 self.component.setLightPower(watts)
@@ -155,11 +162,13 @@ class WhiteLightSourceModel():
 
     async def emergencyPowerLightOff(self):
         """Signals the device to power off immediately, ignoring the 15m
-           warmup period. The manufacturer warns that this can significantly
-           reduce the life of the bulb.
+        warmup period. The manufacturer warns that this can significantly
+        reduce the life of the bulb.
         """
         if self.bulb_on:
-            self.cooldown_task = asyncio.ensure_future(asyncio.sleep(self.cooldownPeriod))
+            self.cooldown_task = asyncio.ensure_future(
+                asyncio.sleep(self.cooldownPeriod)
+            )
             self.component.setLightPower(0)
             self.bulb_on = False
             self.off_time = time.time()

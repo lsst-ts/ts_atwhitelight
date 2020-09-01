@@ -59,10 +59,10 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
     hardware_listener_interval : int/float
         frequency, in seconds, that we check in on the hardware
     """
-    def __init__(self, config_dir=None, initial_state=salobj.State.STANDBY, initial_simulation_mode=0):
+    def __init__(self, config_dir=None, initial_state=salobj.State.STANDBY, simulation_mode=0):
         schema_path = pathlib.Path(__file__).resolve().parents[4].joinpath("schema", "ATWhiteLight.yaml")
         super().__init__("ATWhiteLight", index=0, schema_path=schema_path, config_dir=config_dir,
-                         initial_state=initial_state, initial_simulation_mode=initial_simulation_mode)
+                         initial_state=initial_state, simulation_mode=simulation_mode)
         self.kiloarcModel = None
         
         self.detailed_state = WLSDetailedState.OFFLINE
@@ -129,7 +129,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
 
     async def begin_start(self, id_data):
         """ Executes during the STANDBY --> DISABLED state
-            transition. Confusing name, IMHO. 
+            transition. Confusing name, IMHO.
         """
         await super().begin_start(id_data)
         self.kiloarcModel.connect()
