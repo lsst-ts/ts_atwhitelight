@@ -10,5 +10,7 @@ class ModelTestCase(unittest.TestCase):
 
     def test_connect(self):
         self.cm = ChillerModel(logging.log(3, None))
-        asyncio.get_event_loop().run_until_complete(self.cm.component.connect())
+        asyncio.get_event_loop().run_until_complete(
+            self.cm.connect("fakeip", -99, sim_mode=1)
+        )
         print("connected?")

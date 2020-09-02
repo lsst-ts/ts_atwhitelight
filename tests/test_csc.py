@@ -52,7 +52,7 @@ class CscTestCase(asynctest.TestCase):
                 b".0104rSupplyT46\r": b"#01040rSupplyT+02045C\r",
                 b".0117sCtrlTmp+018024\r": b"#01170sCtrlTmp+018049\r",
             }
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
+            await harness.remote.cmd_enable.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_setChillerTemperature.set_start(
                 temperature=target_temp, timeout=STD_TIMEOUT
             )
@@ -70,7 +70,7 @@ class CscTestCase(asynctest.TestCase):
                 b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
                 b".0104rSupplyT46\r": b"#01040rSupplyT+018867\r",
             }
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
+            # await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
@@ -100,7 +100,6 @@ class CscTestCase(asynctest.TestCase):
             }
             harness.csc.kiloarcModel.cooldownPeriod = 15
             harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
@@ -132,8 +131,6 @@ class CscTestCase(asynctest.TestCase):
                 b".0113rTECB2Cr6a\r": b"#01130rTECB2Cr052,C95\r",
                 b".0149rUpTime_21\r": b"#01490rUpTime_1666427F\r",
             }
-
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
@@ -169,7 +166,6 @@ class CscTestCase(asynctest.TestCase):
                 b".0152rFanSpd3d7\r": b"#01520rFanSpd30000BC\r",
                 b".0153rFanSpd4d9\r": b"#01530rFanSpd40000BE\r",
             }
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
@@ -200,7 +196,6 @@ class CscTestCase(asynctest.TestCase):
                 b".0113rTECB2Cr6a\r": b"#01130rTECB2Cr047,C99\r",
             }
             harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
@@ -233,7 +228,6 @@ class CscTestCase(asynctest.TestCase):
             }
             harness.csc.kiloarcModel.cooldownPeriod = 15
             harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
@@ -270,7 +264,6 @@ class CscTestCase(asynctest.TestCase):
             }
             harness.csc.kiloarcModel.cooldownPeriod = 15
             harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
@@ -302,7 +295,6 @@ class CscTestCase(asynctest.TestCase):
             }
             harness.csc.kiloarcModel.cooldownPeriod = 15
             harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
@@ -336,7 +328,6 @@ class CscTestCase(asynctest.TestCase):
             }
             harness.csc.kiloarcModel.cooldownPeriod = 15
             harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
@@ -356,7 +347,6 @@ class CscTestCase(asynctest.TestCase):
                 b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
                 b".0104rSupplyT46\r": b"#01040rSupplyT+016764\r",
             }
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.

@@ -162,7 +162,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
         self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
         await asyncio.wait_for(
-            self.chillerModel.connect(self.config.chiller_ip, self.config.chiller_port),
+            self.chillerModel.connect(
+                self.config.chiller_ip, self.config.chiller_port, self.sim_mode
+            ),
             timeout=5,
         )
         await self.apply_warnings_and_alarms()

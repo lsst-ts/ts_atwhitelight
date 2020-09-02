@@ -338,7 +338,7 @@ class ChillerModel:
 
         return output
 
-    async def connect(self, ip, port, sim_mode=0):
+    async def connect(self, ip, port, sim_mode):
         """
         connect to the chiller and start the background tasks that keep the model up-to-date
         """

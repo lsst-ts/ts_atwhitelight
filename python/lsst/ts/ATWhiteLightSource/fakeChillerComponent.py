@@ -4,7 +4,7 @@ import logging
 
 
 class FakeChillerComponent(object):
-    def __init__(self, ip, por, log):
+    def __init__(self, ip, port, com_lock, log):
         self.ip = ip
         self.port = port
         self.timeout = 5
