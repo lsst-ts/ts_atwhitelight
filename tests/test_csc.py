@@ -52,7 +52,7 @@ class CscTestCase(asynctest.TestCase):
                 b".0104rSupplyT46\r": b"#01040rSupplyT+02045C\r",
                 b".0117sCtrlTmp+018024\r": b"#01170sCtrlTmp+018049\r",
             }
-            await harness.remote.cmd_enable.set_start(settingsToApply=None, timeout=20)
+            await harness.remote.cmd_enable.set_start(timeout=20)
             await harness.remote.cmd_setChillerTemperature.set_start(
                 temperature=target_temp, timeout=STD_TIMEOUT
             )
