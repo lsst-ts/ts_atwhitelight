@@ -382,7 +382,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     self.log.debug(str(num_attempts) + " " + str(max_attempts))
                     if num_attempts >= max_attempts:
                         self.log.debug("going FAULT")
-                        self.summary_state = salobj.State.FAULT
+                        self.fault()
                         self.detailed_state = WLSDetailedState.DISCONNECTED
                         self.telemetryLoopTask.cancel()
                         self.kiloarcListenerTask.cancel()  # TODO do we really want to stop this one?
@@ -441,7 +441,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                         "Attempted emergency shutoff of light, but got error: " + str(e)
                     )
                 self.log.debug("kiloarc reporting error FAULT")
-                self.summary_state = salobj.State.FAULT
+                self.fault()
                 self.lamp_off_time = time.time()
                 self.keep_on_chillin_task = asyncio.ensure_future(
                     self.keep_on_chillin()
