@@ -101,7 +101,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.config = None
         self.kiloarc_com_lock = asyncio.Lock()
 
-        self.kilo_interloc = asyncio.ensure_future(self.kiloarc_interlock_loop())
+        self.kilo_interloc = asyncio.create_task(
+            self.kiloarc_interlock_loop()  # , name="Kiloarc Interlock Loop"
+        )
 
         self.interlockLoopBool = True
         self.telemetryLoopBool = True
@@ -159,8 +161,12 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         await super().begin_start(id_data)
         self.kiloarcModel.connect()
-        self.telemetryLoopTask = asyncio.ensure_future(self.telemetryLoop())
-        self.kiloarcListenerTask = asyncio.ensure_future(self.kiloarcListenerLoop())
+        self.telemetryLoopTask = asyncio.create_task(
+            self.telemetryLoop()  # , name="Telemetry Loop"
+        )
+        self.kiloarcListenerTask = asyncio.create_task(
+            self.kiloarcListenerLoop()  # , name="Kiloarc Listener Loop"
+        )
         await asyncio.wait_for(
             self.chillerModel.connect(
                 self.config.chiller_ip, self.config.chiller_port, self.sim_mode
@@ -210,7 +216,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         await self.kiloarcModel.setLightPower(0)
         self.lamp_off_time = time.time()
-        self.keep_on_chillin_task = asyncio.ensure_future(self.keep_on_chillin())
+        self.keep_on_chillin_task = asyncio.create_task(
+            self.keep_on_chillin()  # , name="Keep Chiller Running After Lamp Poweroff Task"
+        )
 
     async def keep_on_chillin(self):
         await asyncio.sleep(self.config.keep_on_chillin_timer)
@@ -233,7 +241,10 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         await self.kiloarcModel.emergencyPowerLightOff()
         self.lamp_off_time = time.time()
-        self.keep_on_chillin_task = asyncio.ensure_future(self.keep_on_chillin())
+        self.keep_on_chillin_task = asyncio.create_task(
+            self.keep_on_chillin()  # ,
+            # name="Keep Chiller Running After Lamp Emergency Poweroff Task"
+        )
 
     async def do_setChillerTemperature(self, id_data):
         """Sets the target temperature for the chiller
@@ -443,9 +454,11 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 self.log.debug("kiloarc reporting error FAULT")
                 self.fault()
                 self.lamp_off_time = time.time()
-                self.keep_on_chillin_task = asyncio.ensure_future(
-                    self.keep_on_chillin()
+                self.keep_on_chillin_task = asyncio.create_task(
+                    self.keep_on_chillin()  # ,
+                    # name="Keep Chiller Running after Kiloarc Reported Error Task"
                 )
+
                 self.detailed_state = WLSDetailedState.ERROR
             await asyncio.sleep(self.hardware_listener_interval)
 

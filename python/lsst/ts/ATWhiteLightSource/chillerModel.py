@@ -354,8 +354,10 @@ class ChillerModel:
         self.run_watchdog = True
         self.queueLoopBool = True
         self.disconnected = False
-        self.queue_task = asyncio.ensure_future(self.queueloop())
-        self.watchdog_task = asyncio.ensure_future(self.watchdogloop())
+        # self.queue_task = asyncio.ensure_future(self.queueloop())
+        asyncio.create_task(self.queueloop())
+        # self.watchdog_task = asyncio.ensure_future(self.watchdogloop())
+        asyncio.create_task(self.watchdogloop())
 
     async def disconnect(self):
         """

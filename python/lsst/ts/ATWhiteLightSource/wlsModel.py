@@ -97,9 +97,9 @@ class WhiteLightSourceModel:
             raise salobj.ExpectedError("Can't power on when we're already powered on.")
         self.component.setLightPower(self.startupWattage)
         self.on_time = time.time()
-        self.warmup_task = asyncio.ensure_future(asyncio.sleep(self.warmupPeriod))
+        self.warmup_task = asyncio.create_task(asyncio.sleep(self.warmupPeriod))
         self.bulb_on = True
-        self.on_task = asyncio.ensure_future(asyncio.sleep(self.startupTime))
+        self.on_task = asyncio.create_task(asyncio.sleep(self.startupTime))
         await self.on_task
         self.component.setLightPower(self.defaultWattage)
 
@@ -139,7 +139,7 @@ class WhiteLightSourceModel:
                 raise salobj.ExpectedError(description + str(remaining) + " seconds.")
 
             if self.bulb_on:
-                self.cooldown_task = asyncio.ensure_future(
+                self.cooldown_task = asyncio.create_task(
                     asyncio.sleep(self.cooldownPeriod)
                 )
                 self.component.setLightPower(0)
@@ -166,9 +166,7 @@ class WhiteLightSourceModel:
         reduce the life of the bulb.
         """
         if self.bulb_on:
-            self.cooldown_task = asyncio.ensure_future(
-                asyncio.sleep(self.cooldownPeriod)
-            )
+            self.cooldown_task = asyncio.create_task(asyncio.sleep(self.cooldownPeriod))
             self.component.setLightPower(0)
             self.bulb_on = False
             self.off_time = time.time()
