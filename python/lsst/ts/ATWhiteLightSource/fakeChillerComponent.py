@@ -1,6 +1,4 @@
 import asyncio
-import socket
-import logging
 
 
 class FakeChillerComponent(object):

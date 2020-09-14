@@ -1,7 +1,4 @@
 import asyncio
-import socket
-import logging
-import time
 
 
 class ChillerComponent(object):
@@ -22,7 +19,7 @@ class ChillerComponent(object):
         # self.log.debug(f"connecting to: {self.ip}:{self.port}.")
         if self.connected:
             raise RuntimeError("Already connected")
-        self.log.debug("about to connect to chiller at" + str(self.ip))
+        self.log.debug(f"Connecting to chiller @ {self.ip}")
         self.reader, self.writer = await asyncio.wait_for(
             asyncio.open_connection(self.ip, self.port), self.timeout
         )

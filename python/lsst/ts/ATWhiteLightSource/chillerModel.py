@@ -146,7 +146,8 @@ class Alarms:
             "External RTD Sensor Short Alarm",
             "Return Temp Sensor Open Alarm",
             "Return Temp Sensor Open Alarm (Maybe \
-                    this should be sensor SHORT alarm? Possible typo in chiller docs)",
+                    this should be sensor SHORT alarm? \
+                        Possible typo in chiller docs)",
         )
         self.C1 = (
             "Global Temp Sensor Alarm",
@@ -217,8 +218,8 @@ class Alarms:
         )
 
         self.L1Alarms = (self.A0, self.A1, self.A2, self.A3, self.A4, self.A5)
-        self.L2AlarmsPt1 = (self.B0, self.B1, self.B2, self.B3, self.B4, self.B5)
-        self.L2AlarmsPt2 = (self.C0, self.C1, self.C2, self.C3, self.C4, self.C5)
+        self.L2Alarms1 = (self.B0, self.B1, self.B2, self.B3, self.B4, self.B5)
+        self.L2Alarms2 = (self.C0, self.C1, self.C2, self.C3, self.C4, self.C5)
 
         self.Warnings = (self.W0, self.W1, self.W2, self.W3)
 
@@ -340,23 +341,23 @@ class ChillerModel:
 
     async def connect(self, ip, port, sim_mode):
         """
-        connect to the chiller and start the background tasks that keep the model up-to-date
+        connect to the chiller and start the background tasks that keep the
+        model up-to-date
         """
         if sim_mode:
-            print("creating simulation component")
+            self.log.debug("creating simulation component")
             self.component = FakeChillerComponent(
                 ip, port, self.chiller_com_lock, self.log
             )
         else:
-            print("creating real component")
-            self.component = ChillerComponent(ip, port, self.chiller_com_lock, self.log)
+            self.log.debug("creating real component")
+            comlock = self.chiller_com_lock
+            self.component = ChillerComponent(ip, port, comlock, self.log)
         await self.component.connect()
         self.run_watchdog = True
         self.queueLoopBool = True
         self.disconnected = False
-        # self.queue_task = asyncio.ensure_future(self.queueloop())
         asyncio.create_task(self.queueloop())
-        # self.watchdog_task = asyncio.ensure_future(self.watchdogloop())
         asyncio.create_task(self.watchdogloop())
 
     async def disconnect(self):
@@ -379,10 +380,14 @@ class ChillerModel:
     async def apply_warnings_and_alarms(self, config):
         msgs = []
         msgs.append(
-            self.cpe.setWarning("HiSupplyTemp", config.chiller_high_supply_temp_warning)
+            self.cpe.setWarning(
+                "HiSupplyTemp", config.chiller_high_supply_temp_warning
+            )
         )
         msgs.append(
-            self.cpe.setWarning("LowSupplyTemp", config.chiller_low_supply_temp_warning)
+            self.cpe.setWarning(
+                "LowSupplyTemp", config.chiller_low_supply_temp_warning
+            )
         )
         msgs.append(
             self.cpe.setWarning(
@@ -401,19 +406,29 @@ class ChillerModel:
         )
 
         msgs.append(
-            self.cpe.setAlarm("HiSupplyTemp", config.chiller_high_supply_temp_alarm)
+            self.cpe.setAlarm(
+                "HiSupplyTemp", config.chiller_high_supply_temp_alarm
+            )
         )
         msgs.append(
-            self.cpe.setAlarm("LowSupplyTemp", config.chiller_low_supply_temp_alarm)
+            self.cpe.setAlarm(
+                "LowSupplyTemp", config.chiller_low_supply_temp_alarm
+            )
         )
         msgs.append(
-            self.cpe.setAlarm("HiAmbientTemp", config.chiller_high_ambient_temp_alarm)
+            self.cpe.setAlarm(
+                "HiAmbientTemp", config.chiller_high_ambient_temp_alarm
+            )
         )
         msgs.append(
-            self.cpe.setAlarm("LowAmbientTemp", config.chiller_low_ambient_temp_alarm)
+            self.cpe.setAlarm(
+                "LowAmbientTemp", config.chiller_low_ambient_temp_alarm
+            )
         )
         msgs.append(
-            self.cpe.setAlarm("LowProcessFlow", config.chiller_low_process_flow_alarm)
+            self.cpe.setAlarm(
+                "LowProcessFlow", config.chiller_low_process_flow_alarm
+            )
         )
 
         for msg in msgs:
@@ -433,7 +448,8 @@ class ChillerModel:
 
     def responder(self, msg):
         """
-        Figure out what data is in a response and pass it along to the appropriate handling method.
+        Figure out what data is in a response and pass it along
+        to the appropriate handling method.
         """
         msg = str(msg)
         checksum = msg[-5:-3]
@@ -450,7 +466,7 @@ class ChillerModel:
 
         # process the string
         if msg[0] != "#":
-            self.log.debug(f"uh oh, {msg} doesn't look like a proper chiller response")
+            self.log.debug(f"{msg} is not a proper chiller response")
         cmd_id = msg[3:5]
         error = msg[5]
         data = msg[14:]
@@ -488,7 +504,8 @@ class ChillerModel:
         self.alarmPresent = AS
         self.warningPresent = WS
 
-        # if watchdog tells us something is wrong, figure out what it is with a high priority
+        # if watchdog tells us something is wrong,
+        # figure out what it is with a high priority
         if self.alarmPresent:
             self.q.put((0, self.cpe.readAlarmStateL1()))
             self.q.put((0, self.cpe.readAlarmStateL2()))
@@ -585,9 +602,9 @@ class ChillerModel:
             for j in range(4):
                 if mask[j]:
                     if msg[0] == "1":
-                        alarmList.append(self.alarms.L2AlarmsPt1[i + 1][j])
+                        alarmList.append(self.alarms.L2Alarms1[i + 1][j])
                     elif msg[0] == "2":
-                        alarmList.append(self.alarms.L2AlarmsPt2[i + 1][j])
+                        alarmList.append(self.alarms.L2Alarms2[i + 1][j])
         self.l2AlarmsPresent = alarmList
 
     def readWarningState_decode(self, msg):
@@ -622,10 +639,14 @@ class ChillerModel:
 
     async def queueloop(self):
         """
-        queue for sending commands to chiller. Telemetry is the lowest priority, and only gets added to the queue
-        when it's empty. Watchdog commands, which report basic status, warnings, and alarms) are higher priority.
-        commands from SAL are the highest priority and always jump to the front of the queue. Chiller docs say
-        it can only accept 1 TCP message per second, which is clearly not the case, but we're sticking to their
+        queue for sending commands to chiller. Telemetry is the
+         lowest priority, and only gets added to the queue
+        when it's empty. Watchdog commands, which report basic
+        status, warnings, and alarms) are higher priority.
+        commands from SAL are the highest priority and always
+        jump to the front of the queue. Chiller docs say
+        it can only accept 1 TCP message per second, which is
+         clearly not the case, but we're sticking to their
         specs anyway...
         """
         while self.queueLoopBool:
@@ -650,19 +671,21 @@ class ChillerModel:
                 resp = await self.component.send_command(command)
             except asyncio.TimeoutError:
                 self.log.debug(
-                    f"Timed out waiting for response from Chiller to {str(command)}"
+                    f"Timed out waiting for chiller response to {str(command)}"
                 )
                 await self.component.disconnect()
                 self.disconnected = True
 
-            # all actions taken in response to messages from the chiller are handled by responder
+            # all actions taken in response to messages from
+            #  the chiller are handled by responder
             self.responder(resp)
             await asyncio.sleep(1)
 
     async def watchdogloop(self):
         """
-        Every 7 seconds, throw a watchdog on the queue. This is the one that will let us know if there
-        are any warnings or alerts, so we check it more frequently than other telemetry.
+        Every 7 seconds, throw a watchdog on the queue. This is the one
+        that will let us know if there are any warnings or alerts, so
+        we check it more frequently than other telemetry.
         """
 
         while self.run_watchdog:
@@ -670,7 +693,8 @@ class ChillerModel:
             await asyncio.sleep(7)
 
     async def reconnect_loop(self, timelimit=120):
-        """this method is unused currently, couldn't get it working for some reason"""
+        """this method is unused currently,
+        couldn't get it working for some reason"""
 
         endTime = time.time() + timelimit
         self.log.debug("starting chiller reconnect")
@@ -679,7 +703,8 @@ class ChillerModel:
 
             while time.time() < endTime:
                 await asyncio.sleep(1)
-                self.log.debug("attempting reconnect" + str(endTime - time.time()))
+                difference = str(endTime - time.time())
+                self.log.debug("attempting reconnect" + difference)
                 if self.component.connected:
                     self.log.debug("SUCCESS??")
                     break
@@ -702,7 +727,8 @@ class ChillerModel:
 
     def _sorter(self, num):
         """
-        Takes a number 0-15 and returns a 4-bit binary representation in the form of a tuple of zeroes
+        Takes a number 0-15 and returns a 4-bit binary
+        representation in the form of a tuple of zeroes
         and ones. Used to decode error messages from chiller.
         """
         if num > 15:

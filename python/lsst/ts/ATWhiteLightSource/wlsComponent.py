@@ -1,10 +1,8 @@
 __all__ = ["WhiteLightSourceComponent"]
 
 from pymodbus.client.sync import ModbusTcpClient as ModbusClient
-from lsst.ts import salobj
 from collections import namedtuple
 import time
-from pymodbus.exceptions import ConnectionException, ModbusIOException
 
 
 class WhiteLightSourceComponent:
@@ -87,7 +85,9 @@ class WhiteLightSourceComponent:
                 booleans representing the status LEDs.
         """
         KiloArcStatus = namedtuple(
-            "KiloArcStatus", ["wattage", "greenLED", "blueLED", "redLED", "errorLED"]
+            "KiloArcStatus", [
+                "wattage", "greenLED", "blueLED", "redLED", "errorLED"
+            ]
         )
 
         voltages = self._readVoltage()
@@ -116,7 +116,8 @@ class WhiteLightSourceComponent:
         Returns
         -------
         volts : float
-            the Kiloarc's input voltage corresponding to the desired output wattage
+            the Kiloarc's input voltage corresponding to the desired output
+            wattage
         """
 
         output = -4.176993316101 + watts / 130.762
@@ -150,7 +151,7 @@ class WhiteLightSourceComponent:
             # may see a fix in a future version, which may require
             # minor code changes on our part.
             # https://github.com/riptideio/pymodbus/issues/298
-            raise ConnectionException
+            raise ConnectionError
 
     def _writeVoltage(self, volts):
         """writes the requested voltage to the ADAM-6024 output register AO0
