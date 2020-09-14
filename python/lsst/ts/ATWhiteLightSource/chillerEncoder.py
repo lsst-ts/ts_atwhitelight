@@ -80,30 +80,7 @@ class ChillerPacketEncoder(object):
 
         if num < -999.9 or num > 999.9:
             raise Exception
-        if num < 0:
-            sign = "-"
-        else:
-            sign = "+"
-        num = float(num)
-        rtemp = round(num, 1)
-        tempstr = str(rtemp)
-
-        # split the string around the decimal character
-        halves = tempstr.split(".")
-
-        # get rid of the - symbol python's string representation puts in
-        if halves[0][0] == "-":
-            halves[0] = halves[0][1:]
-
-        # reassemble
-        whole = halves[0] + halves[1]
-
-        # pad with leading zeros
-        while len(whole) < 4:
-            whole = "0" + whole
-
-        data = sign + whole
-        return data
+        return f"{num*10:+05.0f}"
 
     def watchdog(self):
         """

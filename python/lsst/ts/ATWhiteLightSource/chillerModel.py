@@ -301,40 +301,23 @@ class ChillerModel:
 
     def __str__(self):
         output = (
-            "Control Status: "
-            + str(self.controlStatus)
-            + ", Pump Status: "
-            + str(self.pumpStatus)
-            + ", Chiller Status: "
-            + str(self.chillerStatus)
-            + ", Set Temp "
-            + str(self.setTemp)
-            + ", Supply Temp "
-            + str(self.supplyTemp)
-            + ", Return Temp: "
-            + str(self.returnTemp)
-            + ", Ambient Temp: "
-            + str(self.ambientTemp)
-            + ", Process Flow: "
-            + str(self.processFlow)
-            + ", TEC Bank 1: "
-            + str(self.tecBank1)
-            + ", TEC Bank 2: "
-            + str(self.tecBank2)
-            + ", TE Drive Level: "
-            + str(self.teDrivePct)
-            + ", TE Drive Mode: "
-            + str(self.teDriveMode)
-            + ", Fan1 Speed: "
-            + str(self.fan1speed)
-            + ", Fan2 Speed: "
-            + str(self.fan2speed)
-            + ", Fan3 Speed: "
-            + str(self.fan3speed)
-            + ", Fan4 Speed: "
-            + str(self.fan4speed)
-            + ", Uptime: "
-            + str(self.chillerUptime)
+            f"Control Status: {self.controlStatus}"
+            + f", Pump Status: {self.pumpStatus}"
+            + f", Chiller Status: {self.chillerStatus}"
+            + f", Set Temp: {self.setTemp}"
+            + f", Supply Temp: {self.supplyTemp}"
+            + f", Return Temp: {self.returnTemp}"
+            + f", Ambient Temp: {self.ambientTemp}"
+            + f", Process Flow: {self.processFlow}"
+            + f", TEC Bank 1: {self.tecBank1}"
+            + f", TEC Bank 2: {self.tecBank2}"
+            + f", TE Drive Level: {self.teDrivePct}"
+            + f", TE Drive Mode: {self.teDriveMode}"
+            + f", Fan1 Speed: {self.fan1speed}"
+            + f", Fan2 Speed: {self.fan2speed}"
+            + f", Fan3 Speed: {self.fan3speed}"
+            + f", Fan4 Speed: {self.fan4speed}"
+            + f", Uptime: {self.chillerUptime}"
         )
 
         return output
@@ -346,9 +329,7 @@ class ChillerModel:
         """
         if sim_mode:
             self.log.debug("creating simulation component")
-            self.component = FakeChillerComponent(
-                ip, port, self.chiller_com_lock, self.log
-            )
+            self.component = FakeChillerComponent(ip, port, self.chiller_com_lock, self.log)
         else:
             self.log.debug("creating real component")
             comlock = self.chiller_com_lock
@@ -379,57 +360,17 @@ class ChillerModel:
 
     async def apply_warnings_and_alarms(self, config):
         msgs = []
-        msgs.append(
-            self.cpe.setWarning(
-                "HiSupplyTemp", config.chiller_high_supply_temp_warning
-            )
-        )
-        msgs.append(
-            self.cpe.setWarning(
-                "LowSupplyTemp", config.chiller_low_supply_temp_warning
-            )
-        )
-        msgs.append(
-            self.cpe.setWarning(
-                "HiAmbientTemp", config.chiller_high_ambient_temp_warning
-            )
-        )
-        msgs.append(
-            self.cpe.setWarning(
-                "LowAmbientTemp", config.chiller_low_ambient_temp_warning
-            )
-        )
-        msgs.append(
-            self.cpe.setWarning(
-                "LowProcessFlow", config.chiller_low_process_flow_warning
-            )
-        )
+        msgs.append(self.cpe.setWarning("HiSupplyTemp", config.chiller_high_supply_temp_warning))
+        msgs.append(self.cpe.setWarning("LowSupplyTemp", config.chiller_low_supply_temp_warning))
+        msgs.append(self.cpe.setWarning("HiAmbientTemp", config.chiller_high_ambient_temp_warning))
+        msgs.append(self.cpe.setWarning("LowAmbientTemp", config.chiller_low_ambient_temp_warning))
+        msgs.append(self.cpe.setWarning("LowProcessFlow", config.chiller_low_process_flow_warning))
 
-        msgs.append(
-            self.cpe.setAlarm(
-                "HiSupplyTemp", config.chiller_high_supply_temp_alarm
-            )
-        )
-        msgs.append(
-            self.cpe.setAlarm(
-                "LowSupplyTemp", config.chiller_low_supply_temp_alarm
-            )
-        )
-        msgs.append(
-            self.cpe.setAlarm(
-                "HiAmbientTemp", config.chiller_high_ambient_temp_alarm
-            )
-        )
-        msgs.append(
-            self.cpe.setAlarm(
-                "LowAmbientTemp", config.chiller_low_ambient_temp_alarm
-            )
-        )
-        msgs.append(
-            self.cpe.setAlarm(
-                "LowProcessFlow", config.chiller_low_process_flow_alarm
-            )
-        )
+        msgs.append(self.cpe.setAlarm("HiSupplyTemp", config.chiller_high_supply_temp_alarm))
+        msgs.append(self.cpe.setAlarm("LowSupplyTemp", config.chiller_low_supply_temp_alarm))
+        msgs.append(self.cpe.setAlarm("HiAmbientTemp", config.chiller_high_ambient_temp_alarm))
+        msgs.append(self.cpe.setAlarm("LowAmbientTemp", config.chiller_low_ambient_temp_alarm))
+        msgs.append(self.cpe.setAlarm("LowProcessFlow", config.chiller_low_process_flow_alarm))
 
         for msg in msgs:
             self.q.put((1, msg))
@@ -525,25 +466,13 @@ class ChillerModel:
         """
         parses temp and flowrate data into a python float.
         """
-        temp = 0
-        temp += int(msg[1:4])
-        temp += int(msg[4]) / 10
-        if msg[0] == "-":
-            temp = 0 - temp
-        return temp
+        return int(msg) / 10
 
     def tecBankParser(self, msg):
         """
         parses tec bank amps dc into a python float.
         """
-        cur = 0
-        whole = int(msg[1])
-        dec = int(msg[2:5])
-        cur += whole
-        cur += dec / 1000
-        if msg[0] == "-":
-            cur = 0 - cur
-        return cur
+        return int(msg) / 1000
 
     def readSetTemp_decode(self, msg):
         self.setTemp = self.tempParser(msg)
@@ -670,9 +599,7 @@ class ChillerModel:
                 command = pop[1]
                 resp = await self.component.send_command(command)
             except asyncio.TimeoutError:
-                self.log.debug(
-                    f"Timed out waiting for chiller response to {str(command)}"
-                )
+                self.log.debug(f"Timed out waiting for chiller response to {str(command)}")
                 await self.component.disconnect()
                 self.disconnected = True
 
@@ -711,9 +638,7 @@ class ChillerModel:
                 else:
                     try:
                         await self.disconnect()
-                        await self.connect(
-                            self.config.chiller_ip, self.config.chiller_port
-                        )
+                        await self.connect(self.config.chiller_ip, self.config.chiller_port)
                         self.log.debug("\tconnected!")
                     except asyncio.TimeoutError:
                         self.log.debug("TIMED OUT")

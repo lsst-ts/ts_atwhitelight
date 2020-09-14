@@ -43,9 +43,10 @@ class WhiteLightSourceModel:
         how long do we wait after turing on before we can turn back off
     """
 
-    def __init__(self, ip=None, port=None):
+    def __init__(self, ip=None, port=None, log=None):
         self.ip = ip
         self.port = port
+        self.log = log
         self.config = None
         self.simulation_mode = False
         self.component = None
@@ -64,7 +65,7 @@ class WhiteLightSourceModel:
         self.warmupPeriod = 900
 
     def connect(self):
-        print("connecting to ADAM", self.config.adam_ip, self.config.adam_port)
+        self.log.debug("connecting to ADAM", self.config.adam_ip, self.config.adam_port)
         if self.simulation_mode:
             self.component = WhiteLightSourceComponentSimulator()
         else:
@@ -72,7 +73,7 @@ class WhiteLightSourceModel:
                 self.config.adam_ip, self.config.adam_port, config=self.config
             )
             self.component.reconnect()
-        print("finished connecting")
+        self.log.debug("finished connecting")
 
     async def powerLightOn(self):
         """Signals the Horiba KiloArc to power light on.
@@ -145,9 +146,7 @@ class WhiteLightSourceModel:
                 raise salobj.ExpectedError(description)
 
             if self.bulb_on:
-                self.cooldown_task = asyncio.create_task(
-                    asyncio.sleep(self.cooldownPeriod)
-                )
+                self.cooldown_task = asyncio.create_task(asyncio.sleep(self.cooldownPeriod))
                 self.component.setLightPower(0)
                 self.bulb_on = False
                 self.off_time = time.time()
@@ -156,9 +155,7 @@ class WhiteLightSourceModel:
         else:
             # this executes when watts are inside the 800-1200 range
             if not self.bulb_on:
-                raise salobj.ExpectedError(
-                    "You must turn the light on before setting light power."
-                )
+                raise salobj.ExpectedError("You must turn the light on before setting light power.")
             if not self.on_task.done():
                 await self.on_task
                 self.component.setLightPower(watts)

@@ -8,6 +8,7 @@ class FakeChillerComponent(object):
         self.timeout = 5
         self.con = False
         self.log = log
+        # TODO DM-26466 get rid of carriage returns
         self.response_dict = {
             b".0103rSetTemp26\r": b"#01030rSetTemp+020038\r",
             b".0101WatchDog01\r": b"#01010WatchDog1001E8\r",
@@ -38,7 +39,6 @@ class FakeChillerComponent(object):
 
     async def send_command(self, cmd):
         if cmd in self.response_dict:
-            await asyncio.sleep(0.05)
             return self.response_dict[cmd]
         else:
             return cmd
