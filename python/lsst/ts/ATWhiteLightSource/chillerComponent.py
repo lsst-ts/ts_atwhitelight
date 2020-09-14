@@ -6,17 +6,16 @@ class ChillerComponent(object):
         self.ip = ip
         self.port = port
         self.connect_task = None
-        self.log = None
+        self.log = log
         self.reader = None
         self.writer = None
         self.timeout = 15
-        self.response_dict = {}
         self.last_response = None
         self.chiller_com_lock = com_lock
 
     async def connect(self):
         """Connect to chiller's ethernet-to-serial bridge"""
-        # self.log.debug(f"connecting to: {self.ip}:{self.port}.")
+        self.log.debug(f"connecting to: {self.ip}:{self.port}.")
         if self.connected:
             raise RuntimeError("Already connected")
         self.log.debug(f"Connecting to chiller @ {self.ip}")
@@ -42,11 +41,7 @@ class ChillerComponent(object):
         if self.connected:
             async with self.chiller_com_lock:
                 self.writer.write(cmd)
-                response = await asyncio.wait_for(
-                    self.reader.readuntil(separator=b"\r"), timeout=5
-                )
-                # TODO remove this eventually, it's just used to harvest data for chiller's simulation mode
-                self.response_dict[cmd] = response
+                response = await asyncio.wait_for(self.reader.readuntil(separator=b"\r"), timeout=5)
                 return response
         else:
             raise ConnectionError("not connected")

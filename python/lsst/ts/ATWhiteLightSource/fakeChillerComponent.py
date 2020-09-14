@@ -1,6 +1,3 @@
-import asyncio
-
-
 class FakeChillerComponent(object):
     def __init__(self, ip, port, com_lock, log):
         self.ip = ip
@@ -8,7 +5,8 @@ class FakeChillerComponent(object):
         self.timeout = 5
         self.con = False
         self.log = log
-        # TODO DM-26466 get rid of carriage returns
+        # TODO DM-26466 get rid of carriage returns and add them back in
+        # in decoding/encoding
         self.response_dict = {
             b".0103rSetTemp26\r": b"#01030rSetTemp+020038\r",
             b".0101WatchDog01\r": b"#01010WatchDog1001E8\r",

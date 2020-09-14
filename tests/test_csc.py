@@ -66,7 +66,6 @@ class CscTestCase(asynctest.TestCase):
                 b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
                 b".0104rSupplyT46\r": b"#01040rSupplyT+018867\r",
             }
-            # await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
