@@ -9,7 +9,7 @@ import time
 import enum
 from pymodbus.exceptions import ConnectionException
 
-
+# TODO rename this in DM-26735
 class WLSDetailedState(enum.IntEnum):
     """For the White Light Source, detailed state is implemented
     as a representation of the state of the KiloArc hardware,
@@ -73,7 +73,11 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             simulation_mode=simulation_mode,
         )
         self.kiloarcModel = None
-
+        # TODO DM-26735
+        # if you decide to publish this as an event, you could rename
+        # self.detailed_state -> self. kilo_arc_state and make this a
+        # @property with a @kilo_arc_state.setter that will handle the
+        # event publishing.
         self.detailed_state = WLSDetailedState.OFFLINE
 
         self.telemetry_publish_interval = 5
@@ -367,7 +371,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     self.log.debug(str(num_attempts) + " " + str(max_attempts))
                     if num_attempts >= max_attempts:
                         self.log.debug("going FAULT")
-                        self.fault()
+                        self.fault(code=2, report=f"reconnect failed after {num_attempts}.")
                         self.detailed_state = WLSDetailedState.DISCONNECTED
                         self.telemetryLoopTask.cancel()
                         self.kiloarcListenerTask.cancel()
@@ -424,7 +428,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 except salobj.ExpectedError as e:
                     self.log.debug(f"{e} occured during attempted emergency poweroff")
                 self.log.debug("kiloarc reporting error FAULT")
-                self.fault()
+                self.fault(code=2, report="kiloarc reporting an error")
                 self.lamp_off_time = time.time()
                 self.keep_on_chillin_task = asyncio.create_task(self.keep_on_chillin())
 
