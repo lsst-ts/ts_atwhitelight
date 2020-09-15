@@ -10,6 +10,8 @@ import enum
 from pymodbus.exceptions import ConnectionException
 
 # TODO rename this in DM-26735
+
+
 class WLSDetailedState(enum.IntEnum):
     """For the White Light Source, detailed state is implemented
     as a representation of the state of the KiloArc hardware,
