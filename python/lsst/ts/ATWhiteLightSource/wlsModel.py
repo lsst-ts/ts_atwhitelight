@@ -8,10 +8,10 @@ from .wlsSimComponent import WhiteLightSourceComponentSimulator
 from lsst.ts import salobj
 
 
-class WhiteLightSourceModel():
-    """ 
+class WhiteLightSourceModel:
+    """
     The White Light Source Model. This keeps track of the state of
-    the Kiloarc, and enforces cooldown and warmup periods. 
+    the Kiloarc, and enforces cooldown and warmup periods.
 
     Attributes
     ----------
@@ -42,10 +42,11 @@ class WhiteLightSourceModel():
     warmupPeriod : float
         how long do we wait after turing on before we can turn back off
     """
-    
-    def __init__(self, ip=None, port=None):
+
+    def __init__(self, ip=None, port=None, log=None):
         self.ip = ip
         self.port = port
+        self.log = log
         self.config = None
         self.simulation_mode = False
         self.component = None
@@ -64,65 +65,73 @@ class WhiteLightSourceModel():
         self.warmupPeriod = 900
 
     def connect(self):
-        print("connecting to ADAM", self.config.adam_ip, self.config.adam_port)
+        self.log.debug("connecting to ADAM", self.config.adam_ip, self.config.adam_port)
         if self.simulation_mode:
             self.component = WhiteLightSourceComponentSimulator()
         else:
-            self.component = WhiteLightSourceComponent(self.config.adam_ip, self.config.adam_port, config=self.config)
+            self.component = WhiteLightSourceComponent(
+                self.config.adam_ip, self.config.adam_port, config=self.config
+            )
             self.component.reconnect()
+        self.log.debug("finished connecting")
 
     async def powerLightOn(self):
-        """ Signals the Horiba KiloArc to power light on.
-            We always set the brightness to self.startupWattage for a
-            moment (self.startupTime), then step it back down to the
-            default.
+        """Signals the Horiba KiloArc to power light on.
+        We always set the brightness to self.startupWattage for a
+        moment (self.startupTime), then step it back down to the
+        default.
 
-            Parameters
-            ----------
-            None
+        Parameters
+        ----------
+        None
 
-            Returns
-            -------
-            None
+        Returns
+        -------
+        None
         """
         if not self.cooldown_task.done():  # are we in the cooldown period?
             elapsed = time.time() - self.off_time
             remaining = round(self.cooldownPeriod - elapsed, 1)
-            description = f"Can't power on bulb during {self.cooldownPeriod} second cool-off period. Please wait "
-            raise salobj.ExpectedError(description + str(remaining) + " seconds.")
+            description = f"Can't power on bulb during {self.cooldownPeriod}\
+                        second cool-off period. Please wait "
+            raise salobj.ExpectedError(description + str(remaining) + " sec.")
         if self.bulb_on:
-            raise salobj.ExpectedError("Can't power on when we're already powered on.")
+            raise salobj.ExpectedError(
+                "Can't power on when we're already \
+                 powered on."
+            )
         self.component.setLightPower(self.startupWattage)
         self.on_time = time.time()
-        self.warmup_task = asyncio.ensure_future(asyncio.sleep(self.warmupPeriod))
+        warmup = self.warmupPeriod
+        self.warmup_task = asyncio.create_task(asyncio.sleep(warmup))
         self.bulb_on = True
-        self.on_task = asyncio.ensure_future(asyncio.sleep(self.startupTime))
+        self.on_task = asyncio.create_task(asyncio.sleep(self.startupTime))
         await self.on_task
         self.component.setLightPower(self.defaultWattage)
 
     async def setLightPower(self, watts):
-        """ Sets the brightness (in watts) on the white light source.
-            There are lots of constraints.
-            1 When we turn the bulb on (>800w) we aren't allowed to turn
-              it off for 15m because the Hg inside needs to fully evaporate
-              But we can overrride.
-            2 When we turn the bulb off, we need to wait 15m for the Hg to
-              recondense before we can turn it on again.
-            3 When we turn on, we go to maximum brightness for 2 seconds and
-              then drop back down.
-            4 1200w is the maximum brightness, and requesting higher will
-              produce an error.
-            5 800w is the minimum, and requesting lower is the same as
-              requesting to power off.
+        """Sets the brightness (in watts) on the white light source.
+        There are lots of constraints.
+        1 When we turn the bulb on (>800w) we aren't allowed to turn
+          it off for 15m because the Hg inside needs to fully evaporate
+          But we can overrride.
+        2 When we turn the bulb off, we need to wait 15m for the Hg to
+          recondense before we can turn it on again.
+        3 When we turn on, we go to maximum brightness for 2 seconds and
+          then drop back down.
+        4 1200w is the maximum brightness, and requesting higher will
+          produce an error.
+        5 800w is the minimum, and requesting lower is the same as
+          requesting to power off.
 
-            Parameters
-            ----------
-            watts : int or float
-                Should be <= 1200. Values under 800 power the light off entirely.
+        Parameters
+        ----------
+        watts : int or float
+            Should be <= 1200. Values under 800 power the light off entirely.
 
-            Returns
-            -------
-            None
+        Returns
+        -------
+        None
         """
         # TODO: report watts as telemetry (or events?)
         if watts > 1200:
@@ -130,13 +139,14 @@ class WhiteLightSourceModel():
         if watts < 800:
             # turn bulb off
             if not self.warmup_task.done():
-                description = f"Can't power off bulb during {self.warmupPeriod} second warm-up period. Please wait "
                 elapsed = time.time() - self.on_time
                 remaining = round(self.warmupPeriod - elapsed, 1)
-                raise salobj.ExpectedError(description + str(remaining) + " seconds.")
-                
+                description = f"Can't power off bulb during {self.warmupPeriod}\
+                    second warm-up period. Please wait {remaining} seconds."
+                raise salobj.ExpectedError(description)
+
             if self.bulb_on:
-                self.cooldown_task = asyncio.ensure_future(asyncio.sleep(self.cooldownPeriod))
+                self.cooldown_task = asyncio.create_task(asyncio.sleep(self.cooldownPeriod))
                 self.component.setLightPower(0)
                 self.bulb_on = False
                 self.off_time = time.time()
@@ -155,11 +165,12 @@ class WhiteLightSourceModel():
 
     async def emergencyPowerLightOff(self):
         """Signals the device to power off immediately, ignoring the 15m
-           warmup period. The manufacturer warns that this can significantly
-           reduce the life of the bulb.
+        warmup period. The manufacturer warns that this can significantly
+        reduce the life of the bulb.
         """
         if self.bulb_on:
-            self.cooldown_task = asyncio.ensure_future(asyncio.sleep(self.cooldownPeriod))
+            cd = self.cooldownPeriod
+            self.cooldown_task = asyncio.create_task(asyncio.sleep(cd))
             self.component.setLightPower(0)
             self.bulb_on = False
             self.off_time = time.time()
