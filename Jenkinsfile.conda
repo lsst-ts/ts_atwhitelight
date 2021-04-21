@@ -1,0 +1,2 @@
+@Library('JenkinsShared')_
+CondaPipeline(["ts_atcalsys"], "ts-atwhitelightsource", "lsst.ts.ATWhiteLightSource")

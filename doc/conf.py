@@ -8,6 +8,9 @@ import lsst.ts.ATWhiteLightSource
 
 
 _g = globals()
-_g.update(build_package_configs(
-    project_name='ts_ATWhiteLightSource',
-    version=lsst.ts.ATWhiteLightSource.version.__version__))
+_g.update(
+    build_package_configs(
+        project_name="ts_ATWhiteLightSource",
+        version=lsst.ts.ATWhiteLightSource.version.__version__,
+    )
+)

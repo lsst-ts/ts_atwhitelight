@@ -64,8 +64,15 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         frequency, in seconds, that we check in on the hardware
     """
 
-    def __init__(self, config_dir=None, initial_state=salobj.State.STANDBY, simulation_mode=0):
-        schema_path = pathlib.Path(__file__).resolve().parents[4].joinpath("schema", "ATWhiteLight.yaml")
+    def __init__(
+        self, config_dir=None, initial_state=salobj.State.STANDBY, simulation_mode=0
+    ):
+        schema_path = (
+            pathlib.Path(__file__)
+            .resolve()
+            .parents[4]
+            .joinpath("schema", "ATWhiteLight.yaml")
+        )
         super().__init__(
             "ATWhiteLight",
             index=0,
@@ -134,7 +141,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                             still reporting errors"
                     )
         if self.chillerModel.alarmPresent:
-            alarmlist = self.chillerModel.l1AlarmsPresent + self.chillerModel.l2AlarmsPresent
+            alarmlist = (
+                self.chillerModel.l1AlarmsPresent + self.chillerModel.l2AlarmsPresent
+            )
             raise RuntimeError(
                 f"Can't enter Standby state while chiller \
                     is still reporting alarms: {alarmlist}"
@@ -161,12 +170,16 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         await super().begin_start(id_data)
         self.kiloarcModel.connect()
-        self.telemetryLoopTask = asyncio.create_task(self.telemetryLoop())  # , name="Telemetry Loop"
+        self.telemetryLoopTask = asyncio.create_task(
+            self.telemetryLoop()
+        )  # , name="Telemetry Loop"
         self.kiloarcListenerTask = asyncio.create_task(
             self.kiloarcListenerLoop()  # , name="Kiloarc Listener Loop"
         )
         await asyncio.wait_for(
-            self.chillerModel.connect(self.config.chiller_ip, self.config.chiller_port, self.sim_mode),
+            self.chillerModel.connect(
+                self.config.chiller_ip, self.config.chiller_port, self.sim_mode
+            ),
             timeout=5,
         )
         await self.apply_warnings_and_alarms()
@@ -191,9 +204,15 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         # make sure the chiller is running, and not reporting any alarms
         await self.chillerModel.priority_watchdog()
         if self.chillerModel.chillerStatus != 1:
-            raise salobj.ExpectedError("Can't power light on unless chiller is running.")
-        if self.chillerModel.alarmPresent == 1:  # TODO make this pass along the specific alarm
-            raise salobj.ExpectedError("Can't power light on while chiller is reporting an Alarm")
+            raise salobj.ExpectedError(
+                "Can't power light on unless chiller is running."
+            )
+        if (
+            self.chillerModel.alarmPresent == 1
+        ):  # TODO make this pass along the specific alarm
+            raise salobj.ExpectedError(
+                "Can't power light on while chiller is reporting an Alarm"
+            )
         await self.kiloarcModel.powerLightOn()
 
     async def do_powerLightOff(self, id_data):
@@ -296,7 +315,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         if not self.keep_on_chillin_task.done():
             remaining = (
                 round(
-                    self.config.keep_on_chillin_timer - (time.time() - self.lamp_off_time),
+                    self.config.keep_on_chillin_timer
+                    - (time.time() - self.lamp_off_time),
                     0,
                 )
                 + 5
@@ -315,10 +335,15 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         while self.interlockLoopBool:
             # concatenate a string of the hex codes for alarms
             # directly from chiller
-            alarmHex = str(self.chillerModel.l1AlarmsHex) + str(self.chillerModel.l2AlarmsHex)
+            alarmHex = str(self.chillerModel.l1AlarmsHex) + str(
+                self.chillerModel.l2AlarmsHex
+            )
             # chiller alarms will take us to FAULT even if bulb is off
             if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
-                currentAlarms = self.chillerModel.l1AlarmsPresent + self.chillerModel.l2AlarmsPresent
+                currentAlarms = (
+                    self.chillerModel.l1AlarmsPresent
+                    + self.chillerModel.l2AlarmsPresent
+                )
                 self.log.debug("Chiller Reporting Alarm:" + str(currentAlarms))
                 self.fault(
                     code=2,
@@ -328,10 +353,15 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             # e-stop the bulb.
             if self.kiloarcModel.bulb_on:
                 if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
-                    currentAlarms = self.chillerModel.l1AlarmsPresent + self.chillerModel.l2AlarmsPresent
+                    currentAlarms = (
+                        self.chillerModel.l1AlarmsPresent
+                        + self.chillerModel.l2AlarmsPresent
+                    )
                     self.fault(
                         code=2,
-                        report=alarmHex + " Chiller Reporting Alarm: " + str(currentAlarms),
+                        report=alarmHex
+                        + " Chiller Reporting Alarm: "
+                        + str(currentAlarms),
                     )
                     await self.kiloarcModel.emergencyPowerLightOff()
                 if self.chillerModel.chillerStatus != 1:
@@ -343,7 +373,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     await self.kiloarcModel.emergencyPowerLightOff()
                 if self.chillerModel.pumpStatus == 0:
                     self.fault(code=2, report="Chiller pump status is OFF")
-                    self.log.debug("Chiller Pump OFF, going FAULT and shutting down light")
+                    self.log.debug(
+                        "Chiller Pump OFF, going FAULT and shutting down light"
+                    )
                     await self.kiloarcModel.emergencyPowerLightOff()
                 if self.chillerModel.disconnected:
                     self.fault(code=2, report="Chiller disconnected")
@@ -369,11 +401,16 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     self.log.debug("it worked")
                     break
                 except ConnectionException:
-                    self.log.debug("kiloarc connection problem, attempting reconnect " + str(num_attempts))
+                    self.log.debug(
+                        "kiloarc connection problem, attempting reconnect "
+                        + str(num_attempts)
+                    )
                     self.log.debug(str(num_attempts) + " " + str(max_attempts))
                     if num_attempts >= max_attempts:
                         self.log.debug("going FAULT")
-                        self.fault(code=2, report=f"reconnect failed after {num_attempts}.")
+                        self.fault(
+                            code=2, report=f"reconnect failed after {num_attempts}."
+                        )
                         self.detailed_state = WLSDetailedState.DISCONNECTED
                         self.telemetryLoopTask.cancel()
                         self.kiloarcListenerTask.cancel()
@@ -456,8 +493,12 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             # Kiloarc Telemetry
 
             # calculate uptime and wattage since the last iteration of loop
-            lastIntervalUptime = time.time() / 3600 - self.kiloarcModel.component.bulbHoursLastUpdate
-            lastIntervalWattHours = lastIntervalUptime * self.kiloarcModel.component.bulbState
+            lastIntervalUptime = (
+                time.time() / 3600 - self.kiloarcModel.component.bulbHoursLastUpdate
+            )
+            lastIntervalWattHours = (
+                lastIntervalUptime * self.kiloarcModel.component.bulbState
+            )
 
             # if the bulb is on, update the tracking variables in the component
             if self.kiloarcModel.bulb_on:
@@ -468,8 +509,12 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.kiloarcModel.component.bulbHoursLastUpdate = time.time() / 3600
 
             # publish telemetry
-            self.tel_bulbhour.set_put(bulbhour=float(self.kiloarcModel.component.bulbHours))
-            self.tel_bulbWatthour.set_put(bulbhour=float(self.kiloarcModel.component.bulbWattHours))
+            self.tel_bulbhour.set_put(
+                bulbhour=float(self.kiloarcModel.component.bulbHours)
+            )
+            self.tel_bulbWatthour.set_put(
+                bulbhour=float(self.kiloarcModel.component.bulbWattHours)
+            )
 
             # Chiller Telemetry
             self.tel_chillerFansSpeed.set(fan1Speed=int(self.chillerModel.fan1speed))
@@ -484,26 +529,40 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.tel_chillerUpTime.put()
 
             if self.chillerModel.setTemp is not None:
-                self.tel_chillerTempSensors.set(setTemperature=self.chillerModel.setTemp)
+                self.tel_chillerTempSensors.set(
+                    setTemperature=self.chillerModel.setTemp
+                )
             if self.chillerModel.supplyTemp is not None:
-                self.tel_chillerTempSensors.set(supplyTemperature=self.chillerModel.supplyTemp)
+                self.tel_chillerTempSensors.set(
+                    supplyTemperature=self.chillerModel.supplyTemp
+                )
             if self.chillerModel.returnTemp is not None:
-                self.tel_chillerTempSensors.set(returnTemperature=self.chillerModel.returnTemp)
+                self.tel_chillerTempSensors.set(
+                    returnTemperature=self.chillerModel.returnTemp
+                )
             if self.chillerModel.ambientTemp is not None:
-                self.tel_chillerTempSensors.set(ambientTemperature=self.chillerModel.ambientTemp)
+                self.tel_chillerTempSensors.set(
+                    ambientTemperature=self.chillerModel.ambientTemp
+                )
             self.tel_chillerTempSensors.put()
 
             if self.chillerModel.processFlow is not None:
                 self.tel_chillerProcessFlow.set(flow=self.chillerModel.processFlow)
             self.tel_chillerProcessFlow.put()
             if self.chillerModel.tecBank1 is not None:
-                self.tel_chillerTECBankCurrent.set(bank1Current=self.chillerModel.tecBank1)
+                self.tel_chillerTECBankCurrent.set(
+                    bank1Current=self.chillerModel.tecBank1
+                )
             if self.chillerModel.tecBank2 is not None:
-                self.tel_chillerTECBankCurrent.set(bank2Current=self.chillerModel.tecBank2)
+                self.tel_chillerTECBankCurrent.set(
+                    bank2Current=self.chillerModel.tecBank2
+                )
             self.tel_chillerTECBankCurrent.put()
 
             if self.chillerModel.teDrivePct is not None:
-                self.tel_chillerTEDriveLevel.set(chillerTEDriveLevel=self.chillerModel.teDrivePct)
+                self.tel_chillerTEDriveLevel.set(
+                    chillerTEDriveLevel=self.chillerModel.teDrivePct
+                )
 
             self.tel_chillerTEDriveLevel.put()
 
@@ -528,15 +587,25 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 self.evt_chillerFluidLevelWarning.set_put(warning=False)
                 self.last_warning_state["Process Fluid Level Warning"] = False
 
-            if "Switch to Supply Temp as Control Temp Warning" in self.chillerModel.warnings:
+            if (
+                "Switch to Supply Temp as Control Temp Warning"
+                in self.chillerModel.warnings
+            ):
                 self.evt_chillerSwitchToSupplyTempWarning.set_put(warning=True)
-                self.last_warning_state["Switch to Supply Temp as Control Temp Warning"] = True
+                self.last_warning_state[
+                    "Switch to Supply Temp as Control Temp Warning"
+                ] = True
             elif (
-                "Switch to Supply Temp as Control Temp Warning" in self.last_warning_state
-                and self.last_warning_state["Switch to Supply Temp as Control Temp Warning"]
+                "Switch to Supply Temp as Control Temp Warning"
+                in self.last_warning_state
+                and self.last_warning_state[
+                    "Switch to Supply Temp as Control Temp Warning"
+                ]
             ):
                 self.evt_chillerSwitchToSupplyTempWarning.set_put(warning=False)
-                self.last_warning_state["Switch to Supply Temp as Control Temp Warning"] = False
+                self.last_warning_state[
+                    "Switch to Supply Temp as Control Temp Warning"
+                ] = False
 
             if "High Control Temp Warning" in self.chillerModel.warnings:
                 self.evt_chillerHighControlTempWarning.set_put(warning=True)
