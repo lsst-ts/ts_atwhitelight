@@ -8,6 +8,7 @@ import asyncio
 import time
 import enum
 from pymodbus.exceptions import ConnectionException
+from .config_schema import CONFIG_SCHEMA
 
 # TODO rename this in DM-26735
 
@@ -67,16 +68,10 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
     def __init__(
         self, config_dir=None, initial_state=salobj.State.STANDBY, simulation_mode=0
     ):
-        schema_path = (
-            pathlib.Path(__file__)
-            .resolve()
-            .parents[4]
-            .joinpath("schema", "ATWhiteLight.yaml")
-        )
         super().__init__(
             "ATWhiteLight",
             index=0,
-            schema_path=schema_path,
+            config_schema=CONFIG_SCHEMA,
             config_dir=config_dir,
             initial_state=initial_state,
             simulation_mode=simulation_mode,
