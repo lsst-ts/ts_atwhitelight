@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+import pathlib
 
 import asynctest
 
@@ -8,6 +9,7 @@ from lsst.ts import ATWhiteLightSource
 from random import randrange
 
 STD_TIMEOUT = 15  # standard command timeout (sec)
+TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 
 
 class Harness:
@@ -32,14 +34,34 @@ class Harness:
         await self.csc.close()
 
 
-class CscTestCase(asynctest.TestCase):
-    async def test_initial_info(self):
-        async with Harness(initial_state=salobj.State.ENABLED) as harness:
-            state = await harness.remote.evt_summaryState.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
-            self.assertEqual(state.summaryState, salobj.State.ENABLED)
+class NewCscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
+    def basic_make_csc(self, initial_state, config_dir, simulation_mode):
+        return ATWhiteLightSource.WhiteLightSourceCSC(
+            initial_state=initial_state,
+            config_dir=config_dir,
+            simulation_mode=simulation_mode,
+        )
 
+    '''async def test_state_transitions(self):
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.check_standard_state_transitions(
+                enabled_commands=[
+                    "powerLightOn",
+                    "powerLightOff",
+                    "emergencyPowerLightOff",
+                    "setLightPower",
+                    "setChillerTemperature",
+                    "startCooling",
+                    "stopCooling",
+                ]
+            )'''
+
+
+class CscTestCase(asynctest.TestCase):
     async def test_setChillerTemp(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
             target_temp = randrange(18, 20)

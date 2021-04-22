@@ -3,7 +3,6 @@ __all__ = ["WhiteLightSourceCSC"]
 from lsst.ts import salobj
 from .wlsModel import WhiteLightSourceModel
 from .chillerModel import ChillerModel, AlarmStatus
-import pathlib
 import asyncio
 import time
 import enum
