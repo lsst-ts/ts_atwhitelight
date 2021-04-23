@@ -4,6 +4,11 @@ import time
 from collections import namedtuple
 
 
+class Client:
+    def connect():
+        return True
+
+
 class WhiteLightSourceComponentSimulator:
     """A fake version of the White Light Source component that doesn't
     communicate with hardware at all but prints the wattage
@@ -31,6 +36,7 @@ class WhiteLightSourceComponentSimulator:
     """
 
     def __init__(self, ip="140.252.33.160", port=502):
+        self.client = Client()
         self.bulbHours = 0  # Read this from EFD when we initialize
         self.bulbWattHours = 0  # This too
         self.bulbHoursLastUpdate = time.time() / 3600

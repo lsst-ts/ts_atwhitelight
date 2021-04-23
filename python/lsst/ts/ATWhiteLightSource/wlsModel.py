@@ -146,7 +146,9 @@ class WhiteLightSourceModel:
                 raise salobj.ExpectedError(description)
 
             if self.bulb_on:
-                self.cooldown_task = asyncio.create_task(asyncio.sleep(self.cooldownPeriod))
+                self.cooldown_task = asyncio.create_task(
+                    asyncio.sleep(self.cooldownPeriod)
+                )
                 self.component.setLightPower(0)
                 self.bulb_on = False
                 self.off_time = time.time()
@@ -155,7 +157,9 @@ class WhiteLightSourceModel:
         else:
             # this executes when watts are inside the 800-1200 range
             if not self.bulb_on:
-                raise salobj.ExpectedError("You must turn the light on before setting light power.")
+                raise salobj.ExpectedError(
+                    "You must turn the light on before setting light power."
+                )
             if not self.on_task.done():
                 await self.on_task
                 self.component.setLightPower(watts)

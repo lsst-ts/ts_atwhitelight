@@ -85,9 +85,7 @@ class WhiteLightSourceComponent:
                 booleans representing the status LEDs.
         """
         KiloArcStatus = namedtuple(
-            "KiloArcStatus", [
-                "wattage", "greenLED", "blueLED", "redLED", "errorLED"
-            ]
+            "KiloArcStatus", ["wattage", "greenLED", "blueLED", "redLED", "errorLED"]
         )
 
         voltages = self._readVoltage()

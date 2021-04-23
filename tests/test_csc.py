@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+import pathlib
 
 import asynctest
 
@@ -8,6 +9,7 @@ from lsst.ts import ATWhiteLightSource
 from random import randrange
 
 STD_TIMEOUT = 15  # standard command timeout (sec)
+TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 
 
 class Harness:
@@ -18,7 +20,9 @@ class Harness:
             initial_state=initial_state,
             simulation_mode=1,
         )
-        self.remote = salobj.Remote(domain=self.csc.domain, name="ATWhiteLight", index=0)
+        self.remote = salobj.Remote(
+            domain=self.csc.domain, name="ATWhiteLight", index=0
+        )
 
     async def __aenter__(self):
         await self.csc.start_task
@@ -30,12 +34,34 @@ class Harness:
         await self.csc.close()
 
 
-class CscTestCase(asynctest.TestCase):
-    async def test_initial_info(self):
-        async with Harness(initial_state=salobj.State.ENABLED) as harness:
-            state = await harness.remote.evt_summaryState.next(flush=False, timeout=STD_TIMEOUT)
-            self.assertEqual(state.summaryState, salobj.State.ENABLED)
+class NewCscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
+    def basic_make_csc(self, initial_state, config_dir, simulation_mode):
+        return ATWhiteLightSource.WhiteLightSourceCSC(
+            initial_state=initial_state,
+            config_dir=config_dir,
+            simulation_mode=simulation_mode,
+        )
 
+    '''async def test_state_transitions(self):
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.check_standard_state_transitions(
+                enabled_commands=[
+                    "powerLightOn",
+                    "powerLightOff",
+                    "emergencyPowerLightOff",
+                    "setLightPower",
+                    "setChillerTemperature",
+                    "startCooling",
+                    "stopCooling",
+                ]
+            )'''
+
+
+class CscTestCase(asynctest.TestCase):
     async def test_setChillerTemp(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
             target_temp = randrange(18, 20)
@@ -133,7 +159,9 @@ class CscTestCase(asynctest.TestCase):
             await asyncio.sleep(5)
             self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
             await harness.csc.kiloarcModel.warmup_task
-            await harness.remote.cmd_setLightPower.set_start(power=799, timeout=STD_TIMEOUT)
+            await harness.remote.cmd_setLightPower.set_start(
+                power=799, timeout=STD_TIMEOUT
+            )
             await harness.csc.kiloarcModel.warmup_task
             self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 0)
 
@@ -166,7 +194,9 @@ class CscTestCase(asynctest.TestCase):
             await asyncio.sleep(5)
             self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
             with salobj.assertRaisesAckError():  # (result_contains="too high"):
-                await harness.remote.cmd_setLightPower.set_start(power=1201, timeout=STD_TIMEOUT)
+                await harness.remote.cmd_setLightPower.set_start(
+                    power=1201, timeout=STD_TIMEOUT
+                )
             await harness.csc.kiloarcModel.warmup_task
             await asyncio.sleep(10)
 
@@ -191,7 +221,9 @@ class CscTestCase(asynctest.TestCase):
             await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
             with salobj.assertRaisesAckError():
-                await harness.remote.cmd_setLightPower.set_start(power=1000, timeout=STD_TIMEOUT)
+                await harness.remote.cmd_setLightPower.set_start(
+                    power=1000, timeout=STD_TIMEOUT
+                )
             await asyncio.sleep(10)
 
     async def testCantPowerOnDuringCooldownPeriod(self):
@@ -290,7 +322,9 @@ class CscTestCase(asynctest.TestCase):
             await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
             await asyncio.sleep(5)
             self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
-            await harness.remote.cmd_emergencyPowerLightOff.set_start(timeout=STD_TIMEOUT)
+            await harness.remote.cmd_emergencyPowerLightOff.set_start(
+                timeout=STD_TIMEOUT
+            )
             await asyncio.sleep(10)
 
     async def testCantPowerOnBulbWithoutChiller(self):

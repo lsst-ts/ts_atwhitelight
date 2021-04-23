@@ -41,7 +41,9 @@ class ChillerComponent(object):
         if self.connected:
             async with self.chiller_com_lock:
                 self.writer.write(cmd)
-                response = await asyncio.wait_for(self.reader.readuntil(separator=b"\r"), timeout=5)
+                response = await asyncio.wait_for(
+                    self.reader.readuntil(separator=b"\r"), timeout=5
+                )
                 return response
         else:
             raise ConnectionError("not connected")

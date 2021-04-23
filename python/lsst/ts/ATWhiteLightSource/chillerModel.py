@@ -329,7 +329,9 @@ class ChillerModel:
         """
         if sim_mode:
             self.log.debug("creating simulation component")
-            self.component = FakeChillerComponent(ip, port, self.chiller_com_lock, self.log)
+            self.component = FakeChillerComponent(
+                ip, port, self.chiller_com_lock, self.log
+            )
         else:
             self.log.debug("creating real component")
             comlock = self.chiller_com_lock
@@ -360,17 +362,43 @@ class ChillerModel:
 
     async def apply_warnings_and_alarms(self, config):
         msgs = []
-        msgs.append(self.cpe.setWarning("HiSupplyTemp", config.chiller_high_supply_temp_warning))
-        msgs.append(self.cpe.setWarning("LowSupplyTemp", config.chiller_low_supply_temp_warning))
-        msgs.append(self.cpe.setWarning("HiAmbientTemp", config.chiller_high_ambient_temp_warning))
-        msgs.append(self.cpe.setWarning("LowAmbientTemp", config.chiller_low_ambient_temp_warning))
-        msgs.append(self.cpe.setWarning("LowProcessFlow", config.chiller_low_process_flow_warning))
+        msgs.append(
+            self.cpe.setWarning("HiSupplyTemp", config.chiller_high_supply_temp_warning)
+        )
+        msgs.append(
+            self.cpe.setWarning("LowSupplyTemp", config.chiller_low_supply_temp_warning)
+        )
+        msgs.append(
+            self.cpe.setWarning(
+                "HiAmbientTemp", config.chiller_high_ambient_temp_warning
+            )
+        )
+        msgs.append(
+            self.cpe.setWarning(
+                "LowAmbientTemp", config.chiller_low_ambient_temp_warning
+            )
+        )
+        msgs.append(
+            self.cpe.setWarning(
+                "LowProcessFlow", config.chiller_low_process_flow_warning
+            )
+        )
 
-        msgs.append(self.cpe.setAlarm("HiSupplyTemp", config.chiller_high_supply_temp_alarm))
-        msgs.append(self.cpe.setAlarm("LowSupplyTemp", config.chiller_low_supply_temp_alarm))
-        msgs.append(self.cpe.setAlarm("HiAmbientTemp", config.chiller_high_ambient_temp_alarm))
-        msgs.append(self.cpe.setAlarm("LowAmbientTemp", config.chiller_low_ambient_temp_alarm))
-        msgs.append(self.cpe.setAlarm("LowProcessFlow", config.chiller_low_process_flow_alarm))
+        msgs.append(
+            self.cpe.setAlarm("HiSupplyTemp", config.chiller_high_supply_temp_alarm)
+        )
+        msgs.append(
+            self.cpe.setAlarm("LowSupplyTemp", config.chiller_low_supply_temp_alarm)
+        )
+        msgs.append(
+            self.cpe.setAlarm("HiAmbientTemp", config.chiller_high_ambient_temp_alarm)
+        )
+        msgs.append(
+            self.cpe.setAlarm("LowAmbientTemp", config.chiller_low_ambient_temp_alarm)
+        )
+        msgs.append(
+            self.cpe.setAlarm("LowProcessFlow", config.chiller_low_process_flow_alarm)
+        )
 
         for msg in msgs:
             self.q.put((1, msg))
@@ -599,7 +627,9 @@ class ChillerModel:
                 command = pop[1]
                 resp = await self.component.send_command(command)
             except asyncio.TimeoutError:
-                self.log.debug(f"Timed out waiting for chiller response to {str(command)}")
+                self.log.debug(
+                    f"Timed out waiting for chiller response to {str(command)}"
+                )
                 await self.component.disconnect()
                 self.disconnected = True
 
@@ -638,7 +668,9 @@ class ChillerModel:
                 else:
                     try:
                         await self.disconnect()
-                        await self.connect(self.config.chiller_ip, self.config.chiller_port)
+                        await self.connect(
+                            self.config.chiller_ip, self.config.chiller_port
+                        )
                         self.log.debug("\tconnected!")
                     except asyncio.TimeoutError:
                         self.log.debug("TIMED OUT")

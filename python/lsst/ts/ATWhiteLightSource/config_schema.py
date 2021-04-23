@@ -1,3 +1,10 @@
+__all__ = ["CONFIG_SCHEMA"]
+
+import yaml
+
+
+CONFIG_SCHEMA = yaml.safe_load(
+    """
 $schema: http://json-schema.org/draft-07/schema#
 $id: https://github.com/lsst-ts/ts_ATWhiteLightSource/blob/master/schema/whitelight.yaml
 # title must end with one or more spaces followed by the schema version, which must begin with "v"
@@ -26,7 +33,8 @@ properties:
     type: number
     default: 120
   adam_reconnect_limit:
-    description: Number of seconds to attempt to reconnect to ADAM/KiloArc before we give up and go to fault state
+    description: >-
+        Number of seconds to attempt to reconnect to ADAM/KiloArc before we give up and go to fault state
     type: number
     default: 30
   telemetry_publish_interval:
@@ -70,7 +78,9 @@ properties:
     type: number
     default: 2
   chiller_low_process_flow_alarm:
-    description: Liters per minute threshold for going to fault state and shutting down the lamp due to low process flow
+    description: >-
+        Liters per minute threshold for going to fault state and shutting down the lamp due to low process
+        flow
     type: number
     default: 0.3
   kiloarc_status_signal_threshold:
@@ -81,3 +91,5 @@ properties:
     description: How many seconds to keep the chiller running after the bulb is extinguished
     type: number
     default: 900
+"""
+)
