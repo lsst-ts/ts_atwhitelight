@@ -1,0 +1,33 @@
+# The AdamSensors CSC reads voltages off of the ADAM 6024's six analog input channels, in
+# the range of -10v to 10v. This configuration file allows a type and coefficients to be
+# specified for each channel, so that several types of sensors can be used with a single
+# ADAM device. Types tell the CSC what units to use when publishing telemetry from that
+# sensor. These are the available types and their associated units:
+#
+# Type:         Unit:
+#
+# Temperature   Degrees Celsius
+# Pressure      Pascals
+# None          N/A
+#
+# Coefficients define a polynomial expression that is used to convert volts to
+# the appropriate units. These are passed as a sequence, in descending order. For example,
+# [4, 2, -3] defines the polynomial 4x^2 + 2x - 3. For the TD-1000 pressure transducer used
+# for development, the polynomial is 34478x. [1., 0.] will pass the voltage through
+# unconverted (although the units will show up as degrees or pascals), and is what I am
+# using for testing.
+
+adam_ip: 140.252.32.110
+adam_port: 502
+analog_input_0_type: Pressure
+analog_input_0_coefficients: [1., 0.]
+analog_input_1_type: Pressure
+analog_input_1_coefficients: [1., 0.]
+analog_input_2_type: Pressure
+analog_input_2_coefficients: [1., 0.]
+analog_input_3_type: Pressure
+analog_input_3_coefficients: [1., 0.]
+analog_input_4_type: Pressure
+analog_input_4_coefficients: [1., 0.]
+analog_input_5_type: Temperature
+analog_input_5_coefficients: [1., 0.]

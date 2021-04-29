@@ -8,6 +8,7 @@ import time
 import enum
 from pymodbus.exceptions import ConnectionException
 from .config_schema import CONFIG_SCHEMA
+from . import __version__
 
 # TODO rename this in DM-26735
 
@@ -48,7 +49,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
 
     Parameters
     ----------
-    sim_mode : int
+    simulation_mode : int
         0 to init the CSC to control the actual hardware
         1 to init the CSC in simulation mode
 
@@ -64,6 +65,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         frequency, in seconds, that we check in on the hardware
     """
 
+    version = __version__
+    valid_simulation_modes = (0, 1)
+
     def __init__(
         self, config_dir=None, initial_state=salobj.State.STANDBY, simulation_mode=0
     ):
@@ -75,7 +79,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             initial_state=initial_state,
             simulation_mode=simulation_mode,
         )
-        self.kiloarcModel = None
         # TODO DM-26735
         # if you decide to publish this as an event, you could rename
         # self.detailed_state -> self. kilo_arc_state and make this a
@@ -85,25 +88,21 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
 
         self.telemetry_publish_interval = 5
         self.hardware_listener_interval = 2
-        self.chillerModel = ChillerModel(self.log)
-        self.kiloarcModel = WhiteLightSourceModel(log=self.log)
-        self.sim_mode = 0
+        self.chillerModel = None
+        self.kiloarcModel = None
 
         # setup asyncio tasks for the loops
         done_task = asyncio.Future()
         done_task.set_result(None)
         self.telemetryLoopTask = done_task
         self.kiloarcListenerTask = done_task
-
+        self.interlock_task = done_task
         self.keep_on_chillin_task = done_task
+
         self.lamp_off_time = None
 
         self.config = None
         self.kiloarc_com_lock = asyncio.Lock()
-
-        self.kilo_interloc = asyncio.create_task(
-            self.kiloarc_interlock_loop()  # , name="Kiloarc Interlock Loop"
-        )
 
         self.interlockLoopBool = True
         self.telemetryLoopBool = True
@@ -117,8 +116,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
 
     async def configure(self, config):
         self.config = config
-        self.chillerModel.config = config
-        self.kiloarcModel.config = config
 
     async def begin_standby(self, id_data):
         """When we leave fault state to enter standby, we
@@ -158,33 +155,61 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         await self.chillerModel.disconnect()
         self.kiloarcModel.disconnect()
 
+    async def handle_summary_state(self):
+        if self.disabled_or_enabled:
+            self.log.info("doing disabled_or_enabled block")
+            self.log.info(f"chiller: {self.chillerModel}, kilo: {self.kiloarcModel}")
+            if self.kiloarcModel is None:
+                self.kiloarcModel = WhiteLightSourceModel(log=self.log)
+                self.kiloarcModel.config = self.config
+                self.kiloarcModel.simulation_mode = self.simulation_mode
+                self.kiloarcModel.connect()
+                self.log.info("kiloArcModel created")
+            if self.chillerModel is None:
+                self.chillerModel = ChillerModel(self.log)
+                self.chillerModel.config = self.config
+                await asyncio.wait_for(
+                    self.chillerModel.connect(
+                        self.config.chiller_ip,
+                        self.config.chiller_port,
+                        self.simulation_mode,
+                    ),
+                    timeout=5,
+                )
+                self.log.info("chillerModel created")
+            self.interlock_task = asyncio.create_task(
+                self.kiloarc_interlock_loop(), name="Kiloarc Interlock Loop"
+            )
+            await self.apply_warnings_and_alarms()
+
+            if self.telemetryLoopTask.done():
+                self.telemetryLoopTask = asyncio.create_task(
+                    self.telemetryLoop(), name="Telemetry Loop"
+                )
+            if self.kiloarcListenerTask.done():
+                self.kiloarcListenerTask = asyncio.create_task(
+                    self.kiloarcListenerLoop(), name="Kiloarc Listener Loop"
+                )
+        else:
+            self.log.info("doing something other than enabled/disabled block")
+            self.telemetryLoopTask.cancel()
+            self.kiloarcListenerTask.cancel()
+            self.interlock_task.cancel()
+            if self.kiloarcModel is not None:
+                self.kiloarcModel.disconnect()
+                self.kiloarcModel = None
+            if self.chillerModel is not None:
+                await self.chillerModel.disconnect()
+                self.chillerModel = None
+
     async def begin_start(self, id_data):
         """Executes during the STANDBY --> DISABLED state
         transition. Confusing name, IMHO.
         """
         await super().begin_start(id_data)
-        self.kiloarcModel.connect()
-        self.telemetryLoopTask = asyncio.create_task(
-            self.telemetryLoop()
-        )  # , name="Telemetry Loop"
-        self.kiloarcListenerTask = asyncio.create_task(
-            self.kiloarcListenerLoop()  # , name="Kiloarc Listener Loop"
-        )
-        await asyncio.wait_for(
-            self.chillerModel.connect(
-                self.config.chiller_ip, self.config.chiller_port, self.sim_mode
-            ),
-            timeout=5,
-        )
-        await self.apply_warnings_and_alarms()
 
     async def end_standby(self, id_data):
         await self.chillerModel.disconnect()
-
-    async def implement_simulation_mode(self, sim_mode):
-        """Swaps between real and simulated component upon request."""
-        self.sim_mode = sim_mode
-        self.kiloarcModel.simulation_mode = sim_mode
 
     async def apply_warnings_and_alarms(self):
         await self.chillerModel.apply_warnings_and_alarms(self.config)
@@ -327,25 +352,28 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         Make sure we stop the bulb if something bad happens with the chiller
         """
         while self.interlockLoopBool:
-            # concatenate a string of the hex codes for alarms
-            # directly from chiller
-            alarmHex = str(self.chillerModel.l1AlarmsHex) + str(
-                self.chillerModel.l2AlarmsHex
-            )
-            # chiller alarms will take us to FAULT even if bulb is off
-            if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
-                currentAlarms = (
-                    self.chillerModel.l1AlarmsPresent
-                    + self.chillerModel.l2AlarmsPresent
+            if self.chillerModel is not None:
+                # concatenate a string of the hex codes for alarms
+                # directly from chiller
+                alarmHex = str(self.chillerModel.l1AlarmsHex) + str(
+                    self.chillerModel.l2AlarmsHex
                 )
-                self.log.debug("Chiller Reporting Alarm:" + str(currentAlarms))
-                self.fault(
-                    code=2,
-                    report=alarmHex + " Chiller Reporting Alarm: " + str(currentAlarms),
-                )
+                # chiller alarms will take us to FAULT even if bulb is off
+                if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
+                    currentAlarms = (
+                        self.chillerModel.l1AlarmsPresent
+                        + self.chillerModel.l2AlarmsPresent
+                    )
+                    self.log.debug("Chiller Reporting Alarm:" + str(currentAlarms))
+                    self.fault(
+                        code=2,
+                        report=alarmHex
+                        + " Chiller Reporting Alarm: "
+                        + str(currentAlarms),
+                    )
             # if the bulb is on and something goes wrong with chiller,
             # e-stop the bulb.
-            if self.kiloarcModel.bulb_on:
+            if self.kiloarcModel is not None and self.kiloarcModel.bulb_on:
                 if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
                     currentAlarms = (
                         self.chillerModel.l1AlarmsPresent
@@ -374,8 +402,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 if self.chillerModel.disconnected:
                     self.fault(code=2, report="Chiller disconnected")
                     self.log.info(
-                        "Chiller disconnected, going FAULT and shutting down \
-                        light"
+                        "Chiller disconnected, going FAULT and shutting down light"
                     )
                     await self.kiloarcModel.emergencyPowerLightOff()
 
@@ -647,9 +674,11 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.interlockLoopBool = False
         self.telemetryLoopBool = False
         self.kiloarcListenerLoopBool = False
-        self.kiloarcModel.disconnect()
-        await self.chillerModel.disconnect()
-        await self.kilo_interloc
+        if self.kiloarcModel is not None:
+            self.kiloarcModel.disconnect()
+        if self.chillerModel is not None:
+            await self.chillerModel.disconnect()
+        await self.interlock_task
         await self.telemetryLoopTask
         await self.kiloarcListenerTask
         self.kiloarcModel.cooldown_task.cancel()
