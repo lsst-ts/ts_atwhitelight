@@ -266,7 +266,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.lamp_off_time = time.time()
         self.keep_on_chillin_task = asyncio.create_task(
             self.keep_on_chillin(),
-            name="Keep Chiller Running After Lamp Emergency Poweroff Task"
+            name="Keep Chiller Running After Lamp Emergency Poweroff Task",
         )
 
     async def do_setChillerTemperature(self, id_data):

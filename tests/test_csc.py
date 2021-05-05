@@ -56,7 +56,7 @@ class CscTestCase(asynctest.TestCase):
 
     async def testPowerOn(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            
+
             await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b".0103rSetTemp26\r": b"#01030rSetTemp+019040\r",
@@ -93,7 +93,7 @@ class CscTestCase(asynctest.TestCase):
                 b".0113rTECB2Cr6a\r": b"#01130rTECB2Cr016,C95\r",
                 b".0149rUpTime_21\r": b"#01490rUpTime_1654067C\r",
             }
-            
+
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             harness.csc.kiloarcModel.cooldownPeriod = 15
             harness.csc.kiloarcModel.warmupPeriod = 15
@@ -111,7 +111,7 @@ class CscTestCase(asynctest.TestCase):
         when we ask for 799 watts, we should treat that as 0
         """
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            
+
             await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b".0103rSetTemp26\r": b"#01030rSetTemp+01803F\r",
@@ -143,7 +143,7 @@ class CscTestCase(asynctest.TestCase):
 
     async def testSetPowerTooHigh(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            
+
             await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.chillerModel.component.response_dict = {
                 b".0103rSetTemp26\r": b"#01030rSetTemp+01803F\r",
@@ -224,7 +224,7 @@ class CscTestCase(asynctest.TestCase):
                 b".0152rFanSpd3d7\r": b"#01520rFanSpd30000BC\r",
                 b".0153rFanSpd4d9\r": b"#01530rFanSpd40000BE\r",
             }
-            
+
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             harness.csc.kiloarcModel.cooldownPeriod = 15
             harness.csc.kiloarcModel.warmupPeriod = 15
@@ -261,7 +261,7 @@ class CscTestCase(asynctest.TestCase):
                 b".0149rUpTime_21\r": b"#01490rUpTime_16813982\r",
                 b".0150rFanSpd1d3\r": b"#01500rFanSpd10000B8\r",
             }
-            
+
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             harness.csc.kiloarcModel.cooldownPeriod = 15
             harness.csc.kiloarcModel.warmupPeriod = 15
@@ -308,7 +308,7 @@ class CscTestCase(asynctest.TestCase):
 
     async def testCantPowerOnBulbWithoutChiller(self):
         async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            
+
             await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
             harness.csc.kiloarcModel.cooldownPeriod = 15
             harness.csc.kiloarcModel.warmupPeriod = 15
@@ -327,7 +327,7 @@ class CscTestCase(asynctest.TestCase):
                 b".0104rSupplyT46\r": b"#01040rSupplyT+017866\r",
                 b".0107rReturnT3c\r": b"#01070rReturnT+012352\r",
             }
-            
+
             await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
             harness.csc.kiloarcModel.cooldownPeriod = 15
             harness.csc.kiloarcModel.warmupPeriod = 15
