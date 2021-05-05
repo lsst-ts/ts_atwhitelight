@@ -157,9 +157,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.kiloarcModel.disconnect()
 
     async def handle_summary_state(self):
+        self.log.info(f"handle_summary_state, currently in {self.summary_state}.")
         if self.disabled_or_enabled:
-            self.log.info("doing disabled_or_enabled block")
-            self.log.info(f"chiller: {self.chillerModel}, kilo: {self.kiloarcModel}")
             if self.kiloarcModel is None:
                 self.kiloarcModel = WhiteLightSourceModel(log=self.log)
                 self.kiloarcModel.config = self.config
@@ -192,7 +191,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     self.kiloarcListenerLoop(), name="Kiloarc Listener Loop"
                 )
         else:
-            self.log.info("doing something other than enabled/disabled block")
+            self.log.info("doing cancel everything part of handle_summary_state()")
             self.telemetryLoopTask.cancel()
             self.kiloarcListenerTask.cancel()
             self.interlock_task.cancel()
@@ -261,13 +260,13 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """Powers the light off. This one ignores the warmup period
         that the CSC normally enforces.
         """
-        self.assert_enabled()
+        self.assert_enabled("emergencyPowerLightOff")
         self.log.info(f"emergencyPowerLightOff invoked, state={self.summary_state}")
         await self.kiloarcModel.emergencyPowerLightOff()
         self.lamp_off_time = time.time()
         self.keep_on_chillin_task = asyncio.create_task(
-            self.keep_on_chillin()  # ,
-            # name="Keep Chiller Running After Lamp Emergency Poweroff Task"
+            self.keep_on_chillin(),
+            name="Keep Chiller Running After Lamp Emergency Poweroff Task"
         )
 
     async def do_setChillerTemperature(self, id_data):
@@ -310,7 +309,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         None
         """
         self.assert_enabled("startCooling")
-        self.log.info(f"startCooling state: {self.summary_state}")
         await self.chillerModel.startChillin()
 
     async def do_stopCooling(self, id_data):
@@ -677,7 +675,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             await asyncio.sleep(self.telemetry_publish_interval)
 
     async def close(self):
-        self.log.info("Running CLOSE")
+        self.log.info("Running csc close method")
         self.interlockLoopBool = False
         self.telemetryLoopBool = False
         self.kiloarcListenerLoopBool = False

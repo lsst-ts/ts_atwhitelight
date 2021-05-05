@@ -1,9 +1,5 @@
 import asynctest
-import asyncio
 import pathlib
-
-import asynctest
-
 from lsst.ts import salobj
 from lsst.ts import ATWhiteLightSource
 
@@ -27,5 +23,13 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             simulation_mode=1,
         ):
             await self.check_standard_state_transitions(
-                enabled_commands=["powerLightOn", "powerLightOff"]
+                enabled_commands=[
+                    "powerLightOn",
+                    "powerLightOff",
+                    "emergencyPowerLightOff",
+                    "setLightPower",
+                    "setChillerTemperature",
+                    "startCooling",
+                    "stopCooling",
+                ]
             )
