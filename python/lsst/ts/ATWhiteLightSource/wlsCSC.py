@@ -115,6 +115,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         return "ts_config_atcalsys"
 
     async def configure(self, config):
+        self.log.info(f"configure method called: {config}")
         self.config = config
 
     async def begin_standby(self, id_data):
@@ -197,10 +198,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.interlock_task.cancel()
             if self.kiloarcModel is not None:
                 self.kiloarcModel.disconnect()
-                self.kiloarcModel = None
             if self.chillerModel is not None:
                 await self.chillerModel.disconnect()
-                self.chillerModel = None
 
     async def begin_start(self, id_data):
         """Executes during the STANDBY --> DISABLED state
@@ -238,6 +237,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """Powers the light off. Not available of the lamp is still
         warming up.
         """
+        self.assert_enabled("powerLightOff")
         await self.kiloarcModel.setLightPower(0)
         self.lamp_off_time = time.time()
         self.keep_on_chillin_task = asyncio.create_task(self.keep_on_chillin())
@@ -261,6 +261,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """Powers the light off. This one ignores the warmup period
         that the CSC normally enforces.
         """
+        self.assert_enabled()
+        self.log.info(f"emergencyPowerLightOff invoked, state={self.summary_state}")
         await self.kiloarcModel.emergencyPowerLightOff()
         self.lamp_off_time = time.time()
         self.keep_on_chillin_task = asyncio.create_task(
@@ -279,7 +281,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         -------
         None
         """
+        self.assert_enabled("setChillerTemperature")
         t = id_data.temperature
+        self.log.info(f"trying to set chiller temp, in {self.summary_state}")
         if t > self.config.chiller_high_supply_temp_warning:
             raise salobj.ExpectedError(
                 f"The temperature you have set is above the safe range limit \
@@ -306,6 +310,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         None
         """
         self.assert_enabled("startCooling")
+        self.log.info(f"startCooling state: {self.summary_state}")
         await self.chillerModel.startChillin()
 
     async def do_stopCooling(self, id_data):
@@ -319,6 +324,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         -------
         None
         """
+        self.assert_enabled("stopCooling")
         if self.kiloarcModel.component is not None:
             if not self.kiloarcModel.component.client.connect():
                 raise salobj.ExpectedError(
@@ -387,24 +393,24 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     )
                     await self.kiloarcModel.emergencyPowerLightOff()
                 if self.chillerModel.chillerStatus != 1:
-                    self.fault(code=2, report="Chiller not running")
                     self.log.debug(
                         "Chiller Status not RUN, going FAULT and shutting down \
                             light"
                     )
                     await self.kiloarcModel.emergencyPowerLightOff()
+                    self.fault(code=2, report="Chiller not running")
                 if self.chillerModel.pumpStatus == 0:
-                    self.fault(code=2, report="Chiller pump status is OFF")
                     self.log.debug(
                         "Chiller Pump OFF, going FAULT and shutting down light"
                     )
                     await self.kiloarcModel.emergencyPowerLightOff()
+                    self.fault(code=2, report="Chiller pump status is OFF")
                 if self.chillerModel.disconnected:
-                    self.fault(code=2, report="Chiller disconnected")
                     self.log.info(
                         "Chiller disconnected, going FAULT and shutting down light"
                     )
                     await self.kiloarcModel.emergencyPowerLightOff()
+                    self.fault(code=2, report="Chiller disconnected")
 
             await asyncio.sleep(1)
 
@@ -671,6 +677,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             await asyncio.sleep(self.telemetry_publish_interval)
 
     async def close(self):
+        self.log.info("Running CLOSE")
         self.interlockLoopBool = False
         self.telemetryLoopBool = False
         self.kiloarcListenerLoopBool = False

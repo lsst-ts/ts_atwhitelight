@@ -27,13 +27,5 @@ class CscTestCase(salobj.BaseCscTestCase, asynctest.TestCase):
             simulation_mode=1,
         ):
             await self.check_standard_state_transitions(
-                enabled_commands=[
-                    "powerLightOn",
-                    "powerLightOff",
-                    "emergencyPowerLightOff",
-                    "setLightPower",
-                    "setChillerTemperature",
-                    "startCooling",
-                    "stopCooling",
-                ]
+                enabled_commands=["powerLightOn", "powerLightOff"]
             )
