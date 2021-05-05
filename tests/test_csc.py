@@ -358,7 +358,6 @@ class CscTestCase(asynctest.TestCase):
             await harness.csc.chillerModel.disconnect()
             await asyncio.sleep(5)
             self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 0)
-            self.assertEqual()
 
 
 if __name__ == "__main__":

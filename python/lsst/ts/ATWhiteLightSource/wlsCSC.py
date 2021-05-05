@@ -94,20 +94,17 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         # setup asyncio tasks for the loops
         done_task = asyncio.Future()
         done_task.set_result(None)
+
         self.telemetryLoopTask = done_task
         self.kiloarcListenerTask = done_task
         self.interlock_task = done_task
         self.keep_on_chillin_task = done_task
-
         self.lamp_off_time = None
-
         self.config = None
         self.kiloarc_com_lock = asyncio.Lock()
-
         self.interlockLoopBool = True
         self.telemetryLoopBool = True
         self.kiloarcListenerLoopBool = True
-
         self.last_warning_state = None
 
     @staticmethod
@@ -115,7 +112,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         return "ts_config_atcalsys"
 
     async def configure(self, config):
-        self.log.info(f"configure method called: {config}")
+        self.log.debug(f"configure method called: {config}")
         self.config = config
 
     async def begin_standby(self, id_data):
@@ -157,14 +154,19 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.kiloarcModel.disconnect()
 
     async def handle_summary_state(self):
-        self.log.info(f"handle_summary_state, currently in {self.summary_state}.")
+        """
+        Called when the summary state has changed.
+        Initializes models and connects to hardware when entering
+        enabled or disabled state, otherwise disconnects those things
+        """
+        self.log.debug(f"handle_summary_state, currently in {self.summary_state}.")
         if self.disabled_or_enabled:
             if self.kiloarcModel is None:
                 self.kiloarcModel = WhiteLightSourceModel(log=self.log)
                 self.kiloarcModel.config = self.config
                 self.kiloarcModel.simulation_mode = self.simulation_mode
                 self.kiloarcModel.connect()
-                self.log.info("kiloArcModel created")
+                self.log.debug("kiloArcModel created")
             if self.chillerModel is None:
                 self.chillerModel = ChillerModel(self.log)
                 self.chillerModel.config = self.config
@@ -176,7 +178,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     ),
                     timeout=5,
                 )
-                self.log.info("chillerModel created")
+                self.log.debug("chillerModel created")
             self.interlock_task = asyncio.create_task(
                 self.kiloarc_interlock_loop(), name="Kiloarc Interlock Loop"
             )
@@ -191,23 +193,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                     self.kiloarcListenerLoop(), name="Kiloarc Listener Loop"
                 )
         else:
-            self.log.info("doing cancel everything part of handle_summary_state()")
-            self.telemetryLoopTask.cancel()
-            self.kiloarcListenerTask.cancel()
-            self.interlock_task.cancel()
-            if self.kiloarcModel is not None:
-                self.kiloarcModel.disconnect()
-            if self.chillerModel is not None:
-                await self.chillerModel.disconnect()
-
-    async def begin_start(self, id_data):
-        """Executes during the STANDBY --> DISABLED state
-        transition. Confusing name, IMHO.
-        """
-        await super().begin_start(id_data)
-
-    async def end_standby(self, id_data):
-        await self.chillerModel.disconnect()
+            self._common_close()
 
     async def apply_warnings_and_alarms(self):
         await self.chillerModel.apply_warnings_and_alarms(self.config)
@@ -261,7 +247,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         that the CSC normally enforces.
         """
         self.assert_enabled("emergencyPowerLightOff")
-        self.log.info(f"emergencyPowerLightOff invoked, state={self.summary_state}")
         await self.kiloarcModel.emergencyPowerLightOff()
         self.lamp_off_time = time.time()
         self.keep_on_chillin_task = asyncio.create_task(
@@ -282,7 +267,6 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
         self.assert_enabled("setChillerTemperature")
         t = id_data.temperature
-        self.log.info(f"trying to set chiller temp, in {self.summary_state}")
         if t > self.config.chiller_high_supply_temp_warning:
             raise salobj.ExpectedError(
                 f"The temperature you have set is above the safe range limit \
@@ -674,8 +658,18 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
 
             await asyncio.sleep(self.telemetry_publish_interval)
 
-    async def close(self):
-        self.log.info("Running csc close method")
+    async def close_tasks(self):
+        self.log.debug("Running csc close_tasks method")
+        self._common_close()
+        self.kiloarcModel.cooldown_task.cancel()
+        self.kiloarcModel.warmup_task.cancel()
+        await super().close_tasks()
+
+    async def _common_close(self):
+        """
+        closes the high level tasks and disconnects from models, but doesn't
+        kill the safety timers
+        """
         self.interlockLoopBool = False
         self.telemetryLoopBool = False
         self.kiloarcListenerLoopBool = False
@@ -683,9 +677,3 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             self.kiloarcModel.disconnect()
         if self.chillerModel is not None:
             await self.chillerModel.disconnect()
-        await self.interlock_task
-        await self.telemetryLoopTask
-        await self.kiloarcListenerTask
-        self.kiloarcModel.cooldown_task.cancel()
-        self.kiloarcModel.warmup_task.cancel()
-        await super().close()
