@@ -359,7 +359,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 )
             # if the bulb is on and something goes wrong with chiller,
             # e-stop the bulb.
-            if self.kiloarcModel is not None and self.kiloarcModel.bulb_on:
+            if self.kiloarcModel.bulb_on:
                 if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
                     currentAlarms = (
                         self.chillerModel.l1AlarmsPresent
