@@ -222,7 +222,9 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.assert_enabled("powerLightOff")
         await self.kiloarcModel.setLightPower(0)
         self.lamp_off_time = time.time()
-        self.keep_on_chillin_task = asyncio.create_task(self.keep_on_chillin())
+        self.keep_on_chillin_task = asyncio.create_task(
+            self.keep_on_chillin(),
+            name="Keep the chiller running 15m after powerLightOff")
 
     async def keep_on_chillin(self):
         await asyncio.sleep(self.config.keep_on_chillin_timer)
@@ -338,34 +340,28 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         """
 
         while True:
-            self.log.info("starting interlock")
-            self.log.info(f"chillermodel:{self.chillerModel}")
-            if self.chillerModel is not None:
-                # concatenate a string of the hex codes for alarms
-                # directly from chiller
-                alarmHex = str(self.chillerModel.l1AlarmsHex) + str(
-                    self.chillerModel.l2AlarmsHex
+            # concatenate a string of the hex codes for alarms
+            # directly from chiller
+            alarmHex = str(self.chillerModel.l1AlarmsHex) + str(
+                self.chillerModel.l2AlarmsHex
+            )
+            # chiller alarms will take us to FAULT even if bulb is off
+            if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
+                currentAlarms = (
+                    self.chillerModel.l1AlarmsPresent
+                    + self.chillerModel.l2AlarmsPresent
                 )
-                # chiller alarms will take us to FAULT even if bulb is off
-                if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
-                    currentAlarms = (
-                        self.chillerModel.l1AlarmsPresent
-                        + self.chillerModel.l2AlarmsPresent
-                    )
-                    self.log.debug("Chiller Reporting Alarm:" + str(currentAlarms))
-                    self.fault(
-                        code=2,
-                        report=alarmHex
-                        + " Chiller Reporting Alarm: "
-                        + str(currentAlarms),
-                    )
+                self.log.debug("Chiller Reporting Alarm:" + str(currentAlarms))
+                self.fault(
+                    code=2,
+                    report=alarmHex
+                    + " Chiller Reporting Alarm: "
+                    + str(currentAlarms),
+                )
             # if the bulb is on and something goes wrong with chiller,
             # e-stop the bulb.
-            self.log.info(f"kiloModel: {self.kiloarcModel}")
             if self.kiloarcModel is not None and self.kiloarcModel.bulb_on:
-                self.log.info("bulb on")
                 if self.chillerModel.alarmPresent == AlarmStatus.ALARM:
-                    self.log.info("alarm!")
                     currentAlarms = (
                         self.chillerModel.l1AlarmsPresent
                         + self.chillerModel.l2AlarmsPresent
@@ -481,7 +477,10 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 self.log.debug("kiloarc reporting error FAULT")
                 self.fault(code=2, report="kiloarc reporting an error")
                 self.lamp_off_time = time.time()
-                self.keep_on_chillin_task = asyncio.create_task(self.keep_on_chillin())
+                self.keep_on_chillin_task = asyncio.create_task(
+                    self.keep_on_chillin(),
+                    name="Keep the chiller running 15m after seeing an error light on the kiloarc"
+                )
 
                 self.detailed_state = WLSDetailedState.ERROR
             await asyncio.sleep(self.hardware_listener_interval)
