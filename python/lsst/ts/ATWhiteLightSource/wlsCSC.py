@@ -224,7 +224,8 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
         self.lamp_off_time = time.time()
         self.keep_on_chillin_task = asyncio.create_task(
             self.keep_on_chillin(),
-            name="Keep the chiller running 15m after powerLightOff")
+            name="Keep the chiller running 15m after powerLightOff",
+        )
 
     async def keep_on_chillin(self):
         await asyncio.sleep(self.config.keep_on_chillin_timer)
@@ -354,9 +355,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 self.log.debug("Chiller Reporting Alarm:" + str(currentAlarms))
                 self.fault(
                     code=2,
-                    report=alarmHex
-                    + " Chiller Reporting Alarm: "
-                    + str(currentAlarms),
+                    report=alarmHex + " Chiller Reporting Alarm: " + str(currentAlarms),
                 )
             # if the bulb is on and something goes wrong with chiller,
             # e-stop the bulb.
@@ -479,7 +478,7 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
                 self.lamp_off_time = time.time()
                 self.keep_on_chillin_task = asyncio.create_task(
                     self.keep_on_chillin(),
-                    name="Keep the chiller running 15m after seeing an error light on the kiloarc"
+                    name="Keep the chiller running 15m after seeing an error light on the kiloarc",
                 )
 
                 self.detailed_state = WLSDetailedState.ERROR

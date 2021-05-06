@@ -430,7 +430,7 @@ class ChillerModel:
             total = total + int(binascii.hexlify(bytes(char, "ascii")), 16)
         checksum_from_chiller = hex(total)[-2:]
 
-        if checksum.upper() != checksum_from_chiller.upper():
+        if checksum != checksum_from_chiller.upper():
             raise Exception(
                 f"Checksum error: expected '{checksum}' but got '{checksum_from_chiller}'."
             )
