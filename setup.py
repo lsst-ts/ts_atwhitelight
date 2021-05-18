@@ -8,7 +8,6 @@ test_reqs = [
     "pytest",
     "pytest-flake8",
     "pytest-coverage",
-    "asynctest",
     "black==20.8b1",
     "pytest-black",
 ]
