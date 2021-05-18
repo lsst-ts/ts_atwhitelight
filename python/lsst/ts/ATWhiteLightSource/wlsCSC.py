@@ -659,14 +659,13 @@ class WhiteLightSourceCSC(salobj.ConfigurableCsc):
             await asyncio.sleep(self.telemetry_publish_interval)
 
     async def close_tasks(self):
-        self.log.debug("Running csc close_tasks method")
         await self._common_close()
         self.kiloarcModel.cooldown_task.cancel()
         self.kiloarcModel.warmup_task.cancel()
         await super().close_tasks()
 
     async def _common_close(self):
-        """Close the high level tasks and disconnect from models, but do
+        """Close the high level tasks and disconnect from models, but doesn't
         kill the safety timers.
         """
         self.telemetryLoopTask.cancel()
