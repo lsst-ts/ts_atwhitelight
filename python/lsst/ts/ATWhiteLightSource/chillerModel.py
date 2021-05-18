@@ -431,7 +431,9 @@ class ChillerModel:
         checksum_from_chiller = hex(total)[-2:]
 
         if checksum != checksum_from_chiller.upper():
-            raise Exception
+            raise Exception(
+                f"Checksum error: expected '{checksum}' but got '{checksum_from_chiller}'."
+            )
 
         # process the string
         if msg[0] != "#":

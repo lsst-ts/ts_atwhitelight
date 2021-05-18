@@ -5,7 +5,7 @@ from collections import namedtuple
 
 
 class Client:
-    def connect():
+    def connect(self):
         return True
 
 

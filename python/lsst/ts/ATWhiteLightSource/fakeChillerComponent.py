@@ -27,7 +27,7 @@ class FakeChillerComponent(object):
 
     async def connect(self):
         """Connect to chiller's ethernet-to-serial bridge"""
-        # self.log.debug(f"connecting to: {self.ip}:{self.port}.")
+        self.log.info(f"connecting to: {self.ip}:{self.port}.")
         if self.connected:
             raise RuntimeError("Already connected")
         self.con = True
