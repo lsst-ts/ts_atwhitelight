@@ -22,9 +22,9 @@ base_prefix = pathlib.PurePosixPath(sys.base_prefix)
 data_files_path = tools_path.relative_to(base_prefix).parents[1]
 
 setuptools.setup(
-    name="ts-atwhitelightsource",
+    name="ts-atwhitelight",
     use_scm_version={
-        "write_to": "python/lsst/ts/ATWhiteLightSource/version.py",
+        "write_to": "python/lsst/ts/atwhitelight/version.py",
         "write_to_template": scm_version_template,
     },
     setup_requires=setup_reqs,
@@ -33,11 +33,11 @@ setuptools.setup(
     packages=setuptools.find_namespace_packages(where="python"),
     package_dir={"": "python"},
     package_data={"": ["*.rst", "*.yaml"]},
-    scripts=["bin/run_ATWhiteLightSource.py"],
+    scripts=["bin/run_atwhitelight.py"],
     tests_require=test_reqs,
     license="GPL",
     project_urls={
         "Bug Tracker": "https://jira.lsstcorp.org/secure/Dashboard.jspa",
-        "Source Code": "https://github.com/lsst-ts/ts_ATWhiteLightSource",
+        "Source Code": "https://github.com/lsst-ts/ts_atwhitelight",
     },
 )

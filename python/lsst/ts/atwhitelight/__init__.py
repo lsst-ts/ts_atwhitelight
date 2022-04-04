@@ -1,4 +1,4 @@
-# This file is part of ts_ATWhiteLightSource.
+# This file is part of ts_atwhitelight.
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
@@ -24,6 +24,13 @@ try:
 except ImportError:
     __version__ = "?"
 
-from .wlsCSC import *
-from .wlsModel import *
-from .wlsSimComponent import *
+from .chiller_base import *
+from .lamp_base import *
+from .config_schema import *
+from .chiller_client import *
+from .chiller_model import *
+from .labjack_interface import *
+from .lamp_model import *
+from .mock_chiller import *
+from .mock_labjack_interface import *
+from .atwhitelight_csc import *

@@ -1,48 +1,744 @@
+# This file is part of ts_atwhitelight.
+#
+# Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import asyncio
 import unittest
+import math
 import pathlib
-
-import asynctest
+import pytest
 
 from lsst.ts import salobj
-from lsst.ts import ATWhiteLightSource
-from random import randrange
+from lsst.ts import atwhitelight
+from lsst.ts.idl.enums.ATWhiteLight import (
+    ChillerControllerState,
+    ErrorCode,
+    LampBasicState,
+    LampControllerError,
+    LampControllerState,
+    ShutterState,
+)
+from lsst.ts.atwhitelight.chiller_model import READ_RETURN_TEMPERATURE
 
-STD_TIMEOUT = 15  # standard command timeout (sec)
+STD_TIMEOUT = 30  # standard command timeout (sec)
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
 
+# Amount by which the clock may jitter when running Docker on macOS
+TIME_SLOP = 0.2
 
-class Harness:
-    def __init__(self, initial_state, config_dir=None):
-        salobj.set_random_lsst_dds_domain()
-        self.csc = ATWhiteLightSource.WhiteLightSourceCSC(
+
+class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
+    def basic_make_csc(self, initial_state, config_dir, simulation_mode, override=""):
+        return atwhitelight.ATWhiteLightCsc(
             config_dir=config_dir,
             initial_state=initial_state,
-            simulation_mode=1,
-        )
-        self.remote = salobj.Remote(
-            domain=self.csc.domain, name="ATWhiteLight", index=0
-        )
-
-    async def __aenter__(self):
-        await self.csc.start_task
-        await self.remote.start_task
-        return self
-
-    async def __aexit__(self, *args):
-        await self.remote.close()
-        await self.csc.close()
-
-
-class NewCscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
-    def basic_make_csc(self, initial_state, config_dir, simulation_mode):
-        return ATWhiteLightSource.WhiteLightSourceCSC(
-            initial_state=initial_state,
-            config_dir=config_dir,
+            override=override,
             simulation_mode=simulation_mode,
         )
 
-    '''async def test_state_transitions(self):
+    async def check_fault_to_standby_while_cooling(self, can_recover):
+        """Test that you can't go from FAULT to STANDBY while cooling,
+
+        but after cooling is done then it may be OK.
+        """
+        remaining_cooldown = self.csc.lamp_model.get_remaining_cooldown()
+        assert remaining_cooldown > 0
+
+        with pytest.raises(salobj.AckError):
+            await self.remote.cmd_standby.start()
+
+        await self.wait_cooldown()
+
+        if can_recover:
+            await self.remote.cmd_standby.start()
+            await self.assert_next_summary_state(state=salobj.State.STANDBY)
+        else:
+            with pytest.raises(salobj.AckError):
+                await self.remote.cmd_standby.start()
+
+    async def test_chiller_alarms(self):
+        """Test reporting of chiller alarms and warnings."""
+        # Don't bother enabling the CSC; the focus is on connecting
+        # and reporting the correct errors.
+        async with self.make_csc(
+            initial_state=salobj.State.DISABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(state=salobj.State.DISABLED)
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerConnected, connected=False
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected, connected=False
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerConnected, connected=True
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected, connected=True
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerWatchdog,
+                controllerState=ChillerControllerState.STANDBY,
+                pumpRunning=False,
+                alarmsPresent=0,
+                warningsPresent=0,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerAlarms,
+                level1=0,
+                level21=0,
+                level22=0,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerWarnings,
+                warnings=0,
+            )
+
+            mock_chiller = self.csc.chiller_model.mock_chiller
+            is_first = True
+            for l1_alarms, l21_alarms, l22_alarms, warnings in (
+                (1, 2, 4, 8),
+                (3, 5, 7, 9),
+            ):
+                mock_chiller.l1_alarms = l1_alarms
+                mock_chiller.l21_alarms = l21_alarms
+                mock_chiller.l22_alarms = l22_alarms
+                mock_chiller.warnings = warnings
+                if is_first:
+                    await self.assert_next_sample(
+                        topic=self.remote.evt_chillerWatchdog,
+                        controllerState=ChillerControllerState.STANDBY,
+                        pumpRunning=False,
+                        alarmsPresent=True,
+                        warningsPresent=True,
+                    )
+                is_first = False
+                await self.assert_next_sample(
+                    topic=self.remote.evt_chillerAlarms,
+                    level1=l1_alarms,
+                    level21=l21_alarms,
+                    level22=l22_alarms,
+                )
+                await self.assert_next_sample(
+                    topic=self.remote.evt_chillerWarnings,
+                    warnings=warnings,
+                )
+
+    async def test_chiller_alarm_turns_lamp_off(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(state=salobj.State.ENABLED)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=0,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+            )
+
+            await self.remote.cmd_startChiller.start()
+
+            await self.remote.cmd_turnLampOn.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.WARMUP,
+            )
+
+            mock_chiller = self.csc.chiller_model.mock_chiller
+            mock_chiller.l1_alarms = 1
+
+            await self.assert_next_summary_state(state=salobj.State.FAULT)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=ErrorCode.CHILLER_ERROR,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.COOLDOWN,
+            )
+
+            await self.check_fault_to_standby_while_cooling(can_recover=False)
+
+    async def test_chiller_disconnect_turns_lamp_off(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(state=salobj.State.ENABLED)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=0,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+            )
+
+            await self.remote.cmd_startChiller.start()
+
+            await self.remote.cmd_turnLampOn.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.WARMUP,
+            )
+
+            # Kill the connection to the chiller.
+            # This should send the CSC to fault and turn off the lamp.
+            await self.csc.chiller_model.disconnect()
+
+            await self.assert_next_summary_state(state=salobj.State.FAULT)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=ErrorCode.CHILLER_DISCONNECTED,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.COOLDOWN,
+            )
+
+            await self.check_fault_to_standby_while_cooling(can_recover=True)
+
+    async def test_chiller_off_turns_lamp_off(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(state=salobj.State.ENABLED)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=0,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+            )
+
+            await self.remote.cmd_startChiller.start()
+
+            await self.remote.cmd_turnLampOn.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.WARMUP,
+            )
+
+            await self.csc.chiller_model.stop_cooling()
+
+            await self.assert_next_summary_state(state=salobj.State.FAULT)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=ErrorCode.NOT_CHILLING_WITH_LAMP_ON,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.COOLDOWN,
+            )
+
+            # Test recovery; you cannot go to standby while cooling,
+            # but then it's fine
+            with pytest.raises(salobj.AckError):
+                await self.remote.cmd_standby.start()
+
+            await self.wait_cooldown()
+
+            await self.remote.cmd_standby.start()
+            await self.assert_next_summary_state(state=salobj.State.STANDBY)
+
+    async def test_chiller_pump_off_turns_lamp_off(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(state=salobj.State.ENABLED)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=0,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+            )
+
+            await self.remote.cmd_startChiller.start()
+
+            await self.remote.cmd_turnLampOn.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.WARMUP,
+            )
+
+            self.csc.chiller_model.mock_chiller.pump_running = False
+
+            await self.assert_next_summary_state(state=salobj.State.FAULT)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=ErrorCode.NOT_CHILLING_WITH_LAMP_ON,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.COOLDOWN,
+            )
+
+            await self.check_fault_to_standby_while_cooling(can_recover=True)
+
+    async def test_chiller_telemetry(self):
+        async with self.make_csc(
+            initial_state=salobj.State.DISABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            mock_chiller = self.csc.chiller_model.mock_chiller
+            data = await self.remote.tel_chillerFanSpeeds.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
+            for i in range(4):
+                salname = f"fan{i+1}"
+                # The chiller reports fan speeds rounded to the nearest int
+                assert getattr(data, salname) == pytest.approx(
+                    mock_chiller.fan_speeds[i], abs=0.5
+                )
+            data = await self.remote.tel_chillerTemperatures.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
+            assert data.setTemperature == pytest.approx(
+                self.csc.config.chiller.initial_temperature
+            )
+            for salname, attrname in (
+                ("ambientTemperature", "ambient_temperature"),
+                ("returnTemperature", "return_temperature"),
+                ("supplyTemperature", "supply_temperature"),
+            ):
+                with self.subTest(salname=salname, attrname=attrname):
+                    if salname == "returnTemperature" and not READ_RETURN_TEMPERATURE:
+                        assert math.isnan(data.returnTemperature)
+                    else:
+                        # The chiller reports temperatures rounded to 1/10
+                        assert getattr(data, salname) == pytest.approx(
+                            getattr(mock_chiller, attrname), abs=0.05
+                        )
+            data = await self.remote.tel_chillerCoolantFlow.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
+            # The chiller reports flow rounded to 1/10
+            assert data.flow == pytest.approx(mock_chiller.coolant_flow_rate, abs=0.05)
+            data = await self.remote.tel_chillerTECBankCurrents.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
+            for i in range(2):
+                salname = f"bank{i+1}"
+                assert getattr(data, salname) == pytest.approx(
+                    mock_chiller.tec_bank_currents[i], abs=0.0005
+                )
+            data = await self.remote.tel_chillerTECDrive.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
+            assert data.isCooling == mock_chiller.is_cooling
+            assert data.level == pytest.approx(mock_chiller.tec_drive_level, abs=0.5)
+
+    async def test_decode_lamp_errors(self):
+        # Use DISABLED state so the lamp is not forced off (which generates
+        # extra lampState events that complicate the test).
+        async with self.make_csc(
+            initial_state=salobj.State.DISABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(state=salobj.State.DISABLED)
+            while True:
+                data = await self.remote.evt_lampState.next(
+                    flush=False, timeout=STD_TIMEOUT
+                )
+                assert data.controllerError == LampControllerError.NONE
+                if (
+                    data.controllerState == LampControllerState.STANDBY_OR_ON
+                    and data.setPower == 0
+                ):
+                    break
+
+            self.csc.lamp_model.labjack.set_error(LampControllerError.ACCESS_DOOR)
+            data = await self.remote.evt_lampState.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
+            assert data.controllerError == LampControllerError.UNKNOWN
+            await self.assert_next_summary_state(salobj.State.FAULT)
+
+            # Required time to decode the blinking error signal
+            # is the value of the error enum + 1 second
+            decode_duration = int(LampControllerError.ACCESS_DOOR) + 1
+            data = await self.remote.evt_lampState.next(
+                flush=False, timeout=STD_TIMEOUT + decode_duration
+            )
+            assert data.controllerError == LampControllerError.ACCESS_DOOR
+
+            self.csc.lamp_model.labjack.set_error(LampControllerError.NONE)
+            data = await self.remote.evt_lampState.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
+            assert data.controllerError == LampControllerError.NONE
+
+            # Now test an error code that is larger than any known
+            too_large_error_code = max(LampControllerError) + 1
+            self.csc.lamp_model.labjack.set_error(too_large_error_code)
+            data = await self.remote.evt_lampState.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
+            assert data.controllerError == LampControllerError.UNKNOWN
+
+            await asyncio.sleep(too_large_error_code + 1)
+            assert (
+                self.csc.evt_lampState.data.controllerError
+                == LampControllerError.UNKNOWN
+            )
+
+    async def test_lamp_disconnect_fault(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(state=salobj.State.ENABLED)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=0,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected,
+                connected=False,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected,
+                connected=True,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerError=LampControllerError.NONE,
+            )
+
+            await self.remote.cmd_startChiller.start()
+
+            await self.remote.cmd_turnLampOn.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.WARMUP,
+                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerError=LampControllerError.NONE,
+            )
+
+            # Disconnect lamp
+            await self.csc.lamp_model.disconnect()
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected,
+                connected=False,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.COOLDOWN,
+                controllerState=LampControllerState.UNKNOWN,
+                controllerError=LampControllerError.UNKNOWN,
+            )
+
+            # The CSC should react by going to fault
+            await self.assert_next_summary_state(salobj.State.FAULT)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=ErrorCode.LAMP_DISCONNECTED,
+            )
+            assert self.csc.chiller_connected
+            assert not self.csc.lamp_connected
+
+            # It should be possible to go to standby immediately.
+            # The lamp needs to cool down, but we lost all knowledge
+            # of that when we disconnected.
+            await self.remote.cmd_standby.start()
+
+            # Check that the cooldown timers are still running
+            await self.remote.cmd_start.set_start(configurationOverride="")
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected,
+                connected=True,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.COOLDOWN,
+                controllerState=LampControllerState.COOLDOWN,
+                controllerError=LampControllerError.NONE,
+            )
+
+    async def test_lamp_error_turns_lamp_off(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(state=salobj.State.ENABLED)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=0,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerError=LampControllerError.NONE,
+            )
+
+            await self.remote.cmd_startChiller.start()
+
+            await self.remote.cmd_turnLampOn.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.WARMUP,
+                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerError=LampControllerError.NONE,
+            )
+
+            # Put lamp controller into error state; any error will do
+            self.csc.lamp_model.labjack.set_error(LampControllerError.LAMP_STUCK_ON)
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.WARMUP,
+                controllerState=LampControllerState.ERROR,
+                controllerError=LampControllerError.UNKNOWN,
+            )
+
+            # The CSC should react by going to fault and turning off the lamp
+            # but leave the lamp and chiller connected.
+            await self.assert_next_summary_state(salobj.State.FAULT)
+            await self.assert_next_sample(
+                topic=self.remote.evt_errorCode,
+                errorCode=ErrorCode.LAMP_ERROR,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.COOLDOWN,
+                controllerState=LampControllerState.ERROR,
+                controllerError=LampControllerError.UNKNOWN,
+            )
+            assert self.csc.chiller_connected
+            assert self.csc.lamp_connected
+
+            await self.check_fault_to_standby_while_cooling(can_recover=False)
+
+    async def test_reconnect(self):
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerConnected, connected=False
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected, connected=False
+            )
+
+            await self.remote.cmd_start.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerConnected, connected=True
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected, connected=True
+            )
+
+            await self.remote.cmd_standby.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerConnected, connected=False
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected, connected=False
+            )
+
+            await self.remote.cmd_start.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerConnected, connected=True
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected, connected=True
+            )
+
+    async def test_set_chiller_temperature(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            # Check the control sensor (which must be SUPPLY for our
+            # current chiller).
+            assert (
+                self.csc.chiller_model.mock_chiller.control_sensor
+                == atwhitelight.ChillerControlSensor.SUPPLY
+            )
+
+            data = await self.remote.tel_chillerTemperatures.next(
+                flush=True, timeout=STD_TIMEOUT
+            )
+            assert data.setTemperature == pytest.approx(
+                self.csc.config.chiller.initial_temperature, abs=0.05
+            )
+
+            # Values will be rounded to the nearest 1/10 C,
+            # so specify target values that are already rounded
+            # or relax the match tolerance.
+            for target_temp in (18, 20):
+                await self.remote.cmd_setChillerTemperature.set_start(
+                    temperature=target_temp, timeout=STD_TIMEOUT
+                )
+                data = await self.remote.tel_chillerTemperatures.next(
+                    flush=True, timeout=STD_TIMEOUT
+                )
+                assert data.setTemperature == pytest.approx(target_temp)
+
+            # A value out of range of configured
+            # low/high_supply_temperature_warning should be rejected.
+            for bad_target_temp in (
+                self.csc.config.chiller.low_supply_temperature_warning - 0.01,
+                self.csc.config.chiller.high_supply_temperature_warning + 0.01,
+            ):
+                with pytest.raises(salobj.AckError):
+                    await self.remote.cmd_setChillerTemperature.set_start(
+                        temperature=bad_target_temp, timeout=STD_TIMEOUT
+                    )
+                assert self.csc.summary_state == salobj.State.ENABLED
+
+    async def test_shutter_move(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            # From the CSC starting
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.UNKNOWN,
+                actualState=ShutterState.UNKNOWN,
+                enabled=False,
+            )
+            # The mock lamp controller starts with the shutter closed
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                actualState=ShutterState.CLOSED,
+                enabled=False,
+            )
+
+            # Open the shutter
+            await self.remote.cmd_openShutter.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.OPEN,
+                enabled=True,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.OPEN,
+                actualState=ShutterState.UNKNOWN,
+                enabled=True,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.OPEN,
+                actualState=ShutterState.OPEN,
+                enabled=True,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.OPEN,
+                actualState=ShutterState.OPEN,
+                enabled=False,
+            )
+
+            # Close the shutter
+            await self.remote.cmd_closeShutter.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.CLOSED,
+                enabled=True,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.CLOSED,
+                actualState=ShutterState.UNKNOWN,
+                enabled=True,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.CLOSED,
+                actualState=ShutterState.CLOSED,
+                enabled=True,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.CLOSED,
+                actualState=ShutterState.CLOSED,
+                enabled=False,
+            )
+
+            # Timeout
+            self.csc.lamp_model.labjack.shutter_duration = (
+                self.csc.config.lamp.shutter_timeout * 2
+            )
+            open_task = asyncio.create_task(self.remote.cmd_openShutter.start())
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.OPEN,
+                enabled=True,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.OPEN,
+                actualState=ShutterState.UNKNOWN,
+                enabled=True,
+            )
+            with salobj.assertRaisesAckError(ack=salobj.SalRetCode.CMD_TIMEOUT):
+                await open_task
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.OPEN,
+                actualState=ShutterState.UNKNOWN,
+                enabled=False,
+            )
+
+            # Test cannot move due to invalid state
+            self.csc.lamp_model.labjack.shutter_closed_switch = True
+            self.csc.lamp_model.labjack.shutter_open_switch = True
+            await self.assert_next_sample(
+                topic=self.remote.evt_shutterState,
+                commandedState=ShutterState.OPEN,
+                actualState=ShutterState.INVALID,
+                enabled=False,
+            )
+            with salobj.assertRaisesAckError(ack=salobj.SalRetCode.CMD_FAILED):
+                await self.remote.cmd_openShutter.start()
+            with salobj.assertRaisesAckError(ack=salobj.SalRetCode.CMD_FAILED):
+                await self.remote.cmd_closeShutter.start()
+
+    async def test_standard_state_transitions(self):
         async with self.make_csc(
             initial_state=salobj.State.STANDBY,
             config_dir=TEST_CONFIG_DIR,
@@ -50,334 +746,167 @@ class NewCscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         ):
             await self.check_standard_state_transitions(
                 enabled_commands=[
-                    "powerLightOn",
-                    "powerLightOff",
-                    "emergencyPowerLightOff",
-                    "setLightPower",
+                    "closeShutter",
+                    "openShutter",
+                    "turnLampOn",
+                    "turnLampOff",
                     "setChillerTemperature",
-                    "startCooling",
-                    "stopCooling",
+                    "startChiller",
+                    "stopChiller",
                 ]
-            )'''
-
-
-class CscTestCase(asynctest.TestCase):
-    async def test_setChillerTemp(self):
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            target_temp = randrange(18, 20)
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            harness.csc.chillerModel.component.response_dict = {
-                b".0103rSetTemp26\r": b"#01030rSetTemp+019040\r",
-                b".0117sCtrlTmp+019025\r": b"#01170sCtrlTmp+01904A\r",
-                b".0101WatchDog01\r": b"#01010WatchDog2101EA\r",
-                b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
-                b".0104rSupplyT46\r": b"#01040rSupplyT+02045C\r",
-                b".0117sCtrlTmp+018024\r": b"#01170sCtrlTmp+018049\r",
-            }
-            await harness.remote.cmd_enable.set_start(timeout=20)
-            await harness.remote.cmd_setChillerTemperature.set_start(
-                temperature=target_temp, timeout=STD_TIMEOUT
             )
-            await asyncio.sleep(5)
-            self.assertEqual(harness.csc.chillerModel.setTemp, target_temp)
 
-    async def testPowerOn(self):
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            harness.csc.kiloarcModel.warmupPeriod = 1
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            harness.csc.chillerModel.component.response_dict = {
-                b".0103rSetTemp26\r": b"#01030rSetTemp+019040\r",
-                b".0115sStatus_17c\r": b"#01150sStatus_1A1\r",
-                b".0101WatchDog01\r": b"#01010WatchDog2101EA\r",
-                b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
-                b".0104rSupplyT46\r": b"#01040rSupplyT+018867\r",
-            }
-            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
-            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
-            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(0.3)  # Wait for light to start its 1200w startup burst.
-            await asyncio.sleep(4)
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
-
-        await asyncio.sleep(10)
-
-    async def testPowerOff(self):
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            harness.csc.chillerModel.component.response_dict = {
-                b".0103rSetTemp26\r": b"#01030rSetTemp+019040\r",
-                b".0115sStatus_17c\r": b"#01150sStatus_1A1\r",
-                b".0101WatchDog01\r": b"#01010WatchDog2101EA\r",
-                b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
-                b".0104rSupplyT46\r": b"#01040rSupplyT+02065E\r",
-                b".0107rReturnT3c\r": b"#01070rReturnT+012352\r",
-                b".0108rAmbTemp0f\r": b"#01080rAmbTemp+02642B\r",
-                b".0109rProsFlo2f\r": b"#01090rProsFlo+001949\r",
-                b".0110rTECB1Cr66\r": b"#01100rTECB1Cr+002179\r",
-                b".0111rTECDrLvb7\r": b"#01110rTECDrLv+0012CA\r",
-                b".0113rTECB2Cr6a\r": b"#01130rTECB2Cr016,C95\r",
-                b".0149rUpTime_21\r": b"#01490rUpTime_1654067C\r",
-            }
-            harness.csc.kiloarcModel.cooldownPeriod = 15
-            harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
-            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
-            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(5)
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
-            await harness.csc.kiloarcModel.warmup_task
-            await harness.remote.cmd_powerLightOff.set_start(timeout=STD_TIMEOUT)
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 0)
-
-    async def testSetPowerTooLow(self):
-        """
-        when we ask for 799 watts, we should treat that as 0
-        """
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            harness.csc.chillerModel.component.response_dict = {
-                b".0103rSetTemp26\r": b"#01030rSetTemp+01803F\r",
-                b".0115sStatus_17c\r": b"#01150sStatus_1A1\r",
-                b".0101WatchDog01\r": b"#01010WatchDog2101EA\r",
-                b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
-                b".0104rSupplyT46\r": b"#01040rSupplyT+017765\r",
-                b".0107rReturnT3c\r": b"#01070rReturnT+012352\r",
-                b".0108rAmbTemp0f\r": b"#01080rAmbTemp+02642B\r",
-                b".0109rProsFlo2f\r": b"#01090rProsFlo+001949\r",
-                b".0110rTECB1Cr66\r": b"#01100rTECB1Cr+00147B\r",
-                b".0111rTECDrLvb7\r": b"#01110rTECDrLv+0070CE\r",
-                b".0113rTECB2Cr6a\r": b"#01130rTECB2Cr052,C95\r",
-                b".0149rUpTime_21\r": b"#01490rUpTime_1666427F\r",
-            }
-            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
-            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
-            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(5)
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
-            await harness.csc.kiloarcModel.warmup_task
-            await harness.remote.cmd_setLightPower.set_start(
-                power=799, timeout=STD_TIMEOUT
+    async def test_turn_lamp_on(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerConnected, connected=False
             )
-            await harness.csc.kiloarcModel.warmup_task
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 0)
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected, connected=False
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerConnected, connected=True
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampConnected, connected=True
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerWatchdog,
+                controllerState=ChillerControllerState.STANDBY,
+                pumpRunning=False,
+                alarmsPresent=0,
+                warningsPresent=0,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerError=LampControllerError.NONE,
+                setPower=0,
+            )
 
-    async def testSetPowerTooHigh(self):
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            harness.csc.chillerModel.component.response_dict = {
-                b".0103rSetTemp26\r": b"#01030rSetTemp+01803F\r",
-                b".0115sStatus_17c\r": b"#01150sStatus_1A1\r",
-                b".0101WatchDog01\r": b"#01010WatchDog2101EA\r",
-                b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
-                b".0104rSupplyT46\r": b"#01040rSupplyT+017664\r",
-                b".0107rReturnT3c\r": b"#01070rReturnT+012352\r",
-                b".0108rAmbTemp0f\r": b"#01080rAmbTemp+026128\r",
-                b".0109rProsFlo2f\r": b"#01090rProsFlo+001949\r",
-                b".0110rTECB1Cr66\r": b"#01100rTECB1Cr+024581\r",
-                b".0111rTECDrLvb7\r": b"#01110rTECDrLv+0219D3\r",
-                b".0113rTECB2Cr6a\r": b"#01130rTECB2Cr059,C9C\r",
-                b".0149rUpTime_21\r": b"#01490rUpTime_1681447E\r",
-                b".0150rFanSpd1d3\r": b"#01500rFanSpd10000B8\r",
-                b".0151rFanSpd2d5\r": b"#01510rFanSpd20000BA\r",
-                b".0152rFanSpd3d7\r": b"#01520rFanSpd30000BC\r",
-                b".0153rFanSpd4d9\r": b"#01530rFanSpd40000BE\r",
-            }
-            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
-            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
-            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(5)
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
-            with salobj.assertRaisesAckError():  # (result_contains="too high"):
-                await harness.remote.cmd_setLightPower.set_start(
-                    power=1201, timeout=STD_TIMEOUT
+            # Cannot turn on lamp while not cooling
+            with pytest.raises(salobj.AckError):
+                await self.remote.cmd_turnLampOn.start()
+
+            await self.remote.cmd_startChiller.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerWatchdog,
+                controllerState=ChillerControllerState.RUN,
+                pumpRunning=True,
+                alarmsPresent=0,
+                warningsPresent=0,
+            )
+
+            on_power = 922  # Arbitrary valid value
+            await self.remote.cmd_turnLampOn.set_start(power=on_power)
+            data = await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.WARMUP,
+                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerError=LampControllerError.NONE,
+            )
+            assert data.setPower == pytest.approx(on_power)
+
+            # Can start cooling while cooling
+            await self.remote.cmd_startChiller.start()
+
+            # Cannot stop cooling off while lamp is on
+            with pytest.raises(salobj.AckError):
+                await self.remote.cmd_stopChiller.start()
+
+            # Set default power
+            await self.remote.cmd_turnLampOn.set_start(power=0)
+            data = await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.WARMUP,
+                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerError=LampControllerError.NONE,
+            )
+            assert data.setPower == pytest.approx(self.csc.config.lamp.default_power)
+
+            for bad_power in (779.9, 1200.1):
+                with pytest.raises(salobj.AckError):
+                    await self.remote.cmd_turnLampOn.set_start(power=bad_power)
+
+            # Cannot turn lamp off this soon without force=True
+            with pytest.raises(salobj.AckError):
+                await self.remote.cmd_turnLampOff.start()
+
+            await self.remote.cmd_turnLampOff.set_start(force=True)
+            data = await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.COOLDOWN,
+                controllerState=LampControllerState.COOLDOWN,
+                controllerError=LampControllerError.NONE,
+                setPower=0,
+            )
+            data = await self.remote.evt_lampOnHours.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
+            estimated_sec = (
+                self.csc.lamp_model.lamp_off_time - self.csc.lamp_model.lamp_on_time
+            )
+            assert estimated_sec > 0
+            assert data.hours == pytest.approx(estimated_sec / 3600)
+
+            # Cannot turn the chiller off during cooldown
+            with pytest.raises(salobj.AckError):
+                await self.remote.cmd_stopChiller.start()
+
+            # Cannot turn the lamp on during cooldown
+            with pytest.raises(salobj.AckError):
+                await self.remote.cmd_turnLampOn.start()
+
+            # The lamp controller's internal cooldown timer should be shorter
+            # than the CSC's cooldown timer
+            data = await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.COOLDOWN,
+                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerError=LampControllerError.NONE,
+                setPower=0,
+            )
+            data = await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerError=LampControllerError.NONE,
+                setPower=0,
+            )
+
+            await self.remote.cmd_stopChiller.start()
+            await self.assert_next_sample(
+                topic=self.remote.evt_chillerWatchdog,
+                controllerState=ChillerControllerState.STANDBY,
+                pumpRunning=False,
+                alarmsPresent=0,
+                warningsPresent=0,
+            )
+
+    async def wait_cooldown(self):
+        """Wait for the lamp to cool down."""
+        remaining_cooldown = self.csc.lamp_model.get_remaining_cooldown()
+        assert remaining_cooldown > 0
+
+        # Wait for CSC cooldown to end.
+        # Normally the lamp controller's cooldown timer expires first,
+        # then the CSC's timer. But the lamp controller's cooldown timer
+        # is irrelevant if the lamp controller is in an error state.
+        for _ in range(2):
+            data = await self.remote.evt_lampState.next(
+                flush=False, timeout=STD_TIMEOUT + remaining_cooldown
+            )
+            if data.basicState == LampBasicState.OFF:
+                return
+            elif data.basicState == LampBasicState.COOLDOWN:
+                continue
+            else:
+                self.fail(
+                    f"lampState.basicState={data.basicState} != "
+                    f"{LampBasicState.OFF!r} or {LampBasicState.COOLDOWN!r}"
                 )
-            await harness.csc.kiloarcModel.warmup_task
-            await asyncio.sleep(10)
-
-    async def testCantSetPowerWithBulbOff(self):
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            harness.csc.chillerModel.component.response_dict = {
-                b".0103rSetTemp26\r": b"#01030rSetTemp+01803F\r",
-                b".0115sStatus_17c\r": b"#01150sStatus_1A1\r",
-                b".0101WatchDog01\r": b"#01010WatchDog2101EA\r",
-                b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
-                b".0104rSupplyT46\r": b"#01040rSupplyT+019464\r",
-                b".0107rReturnT3c\r": b"#01070rReturnT+012352\r",
-                b".0108rAmbTemp0f\r": b"#01080rAmbTemp+02632A\r",
-                b".0109rProsFlo2f\r": b"#01090rProsFlo+001949\r",
-                b".0110rTECB1Cr66\r": b"#01100rTECB1Cr+007784\r",
-                b".0111rTECDrLvb7\r": b"#01110rTECDrLv+0066D3\r",
-                b".0113rTECB2Cr6a\r": b"#01130rTECB2Cr047,C99\r",
-            }
-            harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
-            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_setLightPower.set_start(
-                    power=1000, timeout=STD_TIMEOUT
-                )
-            await asyncio.sleep(10)
-
-    async def testCantPowerOnDuringCooldownPeriod(self):
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            harness.csc.chillerModel.component.response_dict = {
-                b".0103rSetTemp26\r": b"#01030rSetTemp+01803F\r",
-                b".0115sStatus_17c\r": b"#01150sStatus_1A1\r",
-                b".0101WatchDog01\r": b"#01010WatchDog2101EA\r",
-                b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
-                b".0104rSupplyT46\r": b"#01040rSupplyT+018665\r",
-                b".0107rReturnT3c\r": b"#01070rReturnT+012352\r",
-                b".0108rAmbTemp0f\r": b"#01080rAmbTemp+02632A\r",
-                b".0109rProsFlo2f\r": b"#01090rProsFlo+001949\r",
-                b".0110rTECB1Cr66\r": b"#01100rTECB1Cr+003982\r",
-                b".0111rTECDrLvb7\r": b"#01110rTECDrLv+0049D4\r",
-                b".0113rTECB2Cr6a\r": b"#01130rTECB2Cr041,C93\r",
-                b".0149rUpTime_21\r": b"#01490rUpTime_1681417B\r",
-                b".0150rFanSpd1d3\r": b"#01500rFanSpd10000B8\r",
-                b".0151rFanSpd2d5\r": b"#01510rFanSpd20000BA\r",
-                b".0152rFanSpd3d7\r": b"#01520rFanSpd30000BC\r",
-                b".0153rFanSpd4d9\r": b"#01530rFanSpd40000BE\r",
-            }
-            harness.csc.kiloarcModel.cooldownPeriod = 15
-            harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
-            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
-            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(5)
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
-            await harness.csc.kiloarcModel.warmup_task
-            await harness.remote.cmd_powerLightOff.set_start(timeout=STD_TIMEOUT)
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 0)
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-            await harness.csc.kiloarcModel.cooldown_task
-            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(10)
-
-    async def testCantPowerOffDuringWarmupPeriod(self):
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            self.assertIsNotNone(harness.csc.kiloarcModel.component)
-            harness.csc.chillerModel.component.response_dict = {
-                b".0103rSetTemp26\r": b"#01030rSetTemp+01803F\r",
-                b".0115sStatus_17c\r": b"#01150sStatus_1A1\r",
-                b".0101WatchDog01\r": b"#01010WatchDog2101EA\r",
-                b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
-                b".0104rSupplyT46\r": b"#01040rSupplyT+019565\r",
-                b".0107rReturnT3c\r": b"#01070rReturnT+012352\r",
-                b".0108rAmbTemp0f\r": b"#01080rAmbTemp+02632A\r",
-                b".0109rProsFlo2f\r": b"#01090rProsFlo+001949\r",
-                b".0110rTECB1Cr66\r": b"#01100rTECB1Cr+01507C\r",
-                b".0111rTECDrLvb7\r": b"#01110rTECDrLv+0158D5\r",
-                b".0113rTECB2Cr6a\r": b"#01130rTECB2Cr067,C9B\r",
-                b".0149rUpTime_21\r": b"#01490rUpTime_16813982\r",
-                b".0150rFanSpd1d3\r": b"#01500rFanSpd10000B8\r",
-            }
-            harness.csc.kiloarcModel.cooldownPeriod = 15
-            harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
-            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
-            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(5)
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_powerLightOff.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(10)
-
-    async def testEmergencyPowerLightOff(self):
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            harness.csc.chillerModel.component.response_dict = {
-                b".0103rSetTemp26\r": b"#01030rSetTemp+01803F\r",
-                b".0115sStatus_17c\r": b"#01150sStatus_1A1\r",
-                b".0101WatchDog01\r": b"#01010WatchDog2101EA\r",
-                b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
-                b".0104rSupplyT46\r": b"#01040rSupplyT+018867\r",
-                b".0107rReturnT3c\r": b"#01070rReturnT+012352\r",
-                b".0108rAmbTemp0f\r": b"#01080rAmbTemp+026229\r",
-                b".0109rProsFlo2f\r": b"#01090rProsFlo+001949\r",
-                b".0110rTECB1Cr66\r": b"#01100rTECB1Cr+01617E\r",
-                b".0111rTECDrLvb7\r": b"#01110rTECDrLv+0170CF\r",
-                b".0113rTECB2Cr6a\r": b"#01130rTECB2Cr069,C9D\r",
-                b".0149rUpTime_21\r": b"#01490rUpTime_1681427C\r",
-                b".0150rFanSpd1d3\r": b"#01500rFanSpd10000B8\r",
-                b".0151rFanSpd2d5\r": b"#01510rFanSpd20000BA\r",
-            }
-            harness.csc.kiloarcModel.cooldownPeriod = 15
-            harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
-            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
-            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(5)
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
-            await harness.remote.cmd_emergencyPowerLightOff.set_start(
-                timeout=STD_TIMEOUT
-            )
-            await asyncio.sleep(10)
-
-    async def testCantPowerOnBulbWithoutChiller(self):
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            harness.csc.kiloarcModel.cooldownPeriod = 15
-            harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-
-    async def testCantStopChillingWithBulbOn(self):
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            harness.csc.chillerModel.component.response_dict = {
-                b".0103rSetTemp26\r": b"#01030rSetTemp+01803F\r",
-                b".0115sStatus_17c\r": b"#01150sStatus_1A1\r",
-                b".0101WatchDog01\r": b"#01010WatchDog2101EA\r",
-                b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
-                b".0104rSupplyT46\r": b"#01040rSupplyT+017866\r",
-                b".0107rReturnT3c\r": b"#01070rReturnT+012352\r",
-            }
-            harness.csc.kiloarcModel.cooldownPeriod = 15
-            harness.csc.kiloarcModel.warmupPeriod = 15
-            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
-            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
-            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(5)
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 800)
-            with salobj.assertRaisesAckError():
-                await harness.remote.cmd_stopCooling.set_start(timeout=STD_TIMEOUT)
-
-    async def testBulbStopsWhenChillerDisconnected(self):
-        async with Harness(initial_state=salobj.State.STANDBY) as harness:
-            await harness.remote.cmd_start.set_start(settingsToApply=None, timeout=20)
-            harness.csc.chillerModel.component.response_dict = {
-                b".0103rSetTemp26\r": b"#01030rSetTemp+01803F\r",
-                b".0115sStatus_17c\r": b"#01150sStatus_1A1\r",
-                b".0101WatchDog01\r": b"#01010WatchDog2101EA\r",
-                b".0120rWarnLv1ee\r": b"#01200rWarnLv10800DB\r",
-                b".0104rSupplyT46\r": b"#01040rSupplyT+016764\r",
-            }
-            await harness.remote.cmd_enable.set_start(timeout=STD_TIMEOUT)
-            await harness.remote.cmd_startCooling.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(3)  # Sleep while we wait for chiller to start chilling.
-            await harness.remote.cmd_powerLightOn.set_start(timeout=STD_TIMEOUT)
-            await asyncio.sleep(0.3)  # Wait for light to start its 1200w startup burst.
-            await asyncio.sleep(4)
-            await harness.csc.chillerModel.disconnect()
-            await asyncio.sleep(5)
-            self.assertEqual(harness.csc.kiloarcModel.component.bulbState, 0)
-
-
-if __name__ == "__main__":
-    unittest.main()
