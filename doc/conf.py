@@ -3,14 +3,17 @@
 This configuration only affects single-package Sphinx documenation builds.
 """
 
-from documenteer.sphinxconfig.stackconf import build_package_configs
-import lsst.ts.ATWhiteLightSource
+from documenteer.conf.pipelinespkg import *  # type: ignore # noqa: 403
+import lsst.ts.atwhitelight  # noqa: F401
 
+project = "ts_atwhitelight"
+html_theme_options["logotext"] = project  # type: ignore # noqa: 405
+html_title = project
+html_short_title = project
+# Avoid warning: Could not find tag file _doxygen/doxygen.tag
+doxylink = {}  # type: ignore
 
-_g = globals()
-_g.update(
-    build_package_configs(
-        project_name="ts_ATWhiteLightSource",
-        version=lsst.ts.ATWhiteLightSource.version.__version__,
-    )
-)
+intersphinx_mapping["ts_idl"] = ("https://ts-idl.lsst.io", None)  # type: ignore # noqa: 405
+intersphinx_mapping["ts_salobj"] = ("https://ts-salobj.lsst.io", None)  # type: ignore # noqa: 405
+intersphinx_mapping["ts_tcpip"] = ("https://ts-tcpip.lsst.io", None)  # type: ignore # noqa: 405
+intersphinx_mapping["ts_utils"] = ("https://ts-utils.lsst.io", None)  # type: ignore # noqa: 405
