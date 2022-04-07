@@ -1,4 +1,5 @@
 # -*- python -*-
 from lsst.sconsUtils import scripts
+
 # Python-only package
-scripts.BasicSConstruct("ts_ATWhiteLightSource", disableCc=True)
+scripts.BasicSConstruct("ts_atwhitelight", disableCc=True)

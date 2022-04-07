@@ -1,0 +1,27 @@
+chiller:
+  host: 140.252.33.70
+  port: 4001
+  initial_temperature: 25
+  low_ambient_temperature_warning: 5
+  high_ambient_temperature_warning: 40
+  low_supply_temperature_warning: 5
+  high_supply_temperature_warning: 50
+  low_coolant_flow_rate_warning: 0.5
+  low_ambient_temperature_alarm: 2
+  high_ambient_temperature_alarm: 45
+  low_supply_temperature_alarm: 2
+  high_supply_temperature_alarm: 50
+  low_coolant_flow_rate_alarm: 0.3
+  connect_timeout: 5
+  command_timeout: 5
+  telemetry_interval: 7
+  watchdog_interval: 5
+lamp:
+  device_type: T4
+  connection_type: TCP
+  identifier: 140.252.33.160
+  default_power: 900
+  connect_timeout: 5
+  cooldown_period: 10
+  warmup_period: 10
+  shutter_timeout: 5

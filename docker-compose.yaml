@@ -1,8 +1,8 @@
 version: '3.6'
 services:
-  atwhitelightsource:
+  atwhitelight:
     image: lsstts/develop-env:latest
     volumes:
       - type: bind
         source: ./
-        target: /home/saluser/repos/ts_ATWhiteLightSource
+        target: /home/saluser/repos/ts_atwhitelight
