@@ -6,8 +6,25 @@
 Version History
 ###############
 
+v0.1.1
+------
+
+Changes:
+
+* Add a Jenkinsfile for continuous integration testing.
+
+Requires:
+
+* ts_idl
+* ts_salobj 7
+* ts_tcpip
+* ts_utils
+* IDL file for ATWhiteLight built from ts_xml 11.1
+
 v0.1.0
 ------
+
+Changes:
 
 * The first version with documentation and a version history.
 * The first version to control the lamp controller using a LabJack I/O module.
@@ -20,4 +37,4 @@ Requires:
 * ts_salobj 7
 * ts_tcpip
 * ts_utils
-* IDL file for ATWhiteLight built from ts_xml 11
+* IDL file for ATWhiteLight built from ts_xml 11.1
