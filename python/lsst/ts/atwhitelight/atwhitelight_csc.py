@@ -232,6 +232,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
                 )
 
     async def start(self):
+        await super().start()
         await self.evt_lampConnected.set_write(connected=False)
         await self.evt_chillerConnected.set_write(connected=False)
         await self.evt_shutterState.set_write(
@@ -239,7 +240,6 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             actualState=ShutterState.UNKNOWN,
             enabled=False,
         )
-        await super().start()
 
     async def close_tasks(self):
         await self.disconnect_chiller()
