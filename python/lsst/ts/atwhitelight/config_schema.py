@@ -27,7 +27,7 @@ import yaml
 CONFIG_SCHEMA = yaml.safe_load(
     """
 $schema: http://json-schema.org/draft-07/schema#
-$id: https://github.com/lsst-ts/ts_atwhitelight/blob/master/schema/whitelight.yaml
+$id: https://github.com/lsst-ts/ts_atwhitelight/blob/develop/python/lsst/ts/atwhitelight/config_schema.py
 # title must end with one or more spaces followed by the schema version, which must begin with "v"
 title: Whitelight v2
 description: Schema for AT White Light configuration files
