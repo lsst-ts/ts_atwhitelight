@@ -165,7 +165,11 @@ properties:
         description: Type of LabJack connection, e.g. TCP
         type: string
       identifier:
-        description: LabJack identifier; an IP host address if connection_type=TCP
+        description: >-
+            LabJack indentifier:
+            * A host name or IP address if connection_type = TCP or WIFI
+            * A serial number if connection_type = USB
+            * For testing in an environment with only one LabJack you may use ANY
         type: string
       default_power:
         description: >-
