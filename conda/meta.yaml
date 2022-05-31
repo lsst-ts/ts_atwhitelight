@@ -8,6 +8,10 @@ source:
 
 build:
   script: python -m pip install --no-deps --ignore-installed .
+  entry_points:
+    - command_atwhitelight = lsst.ts.atwhitelight:command_atwhitelight
+    - run_atwhitelight = lsst.ts.atwhitelight:run_atwhitelight
+
   script_env:
     - PATH
     - PYTHONPATH
@@ -29,6 +33,7 @@ test:
     - bin
     - tests
     - setup.cfg
+    - pyproject.toml
   commands:
     - py.test
 

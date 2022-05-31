@@ -19,8 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["ATWhiteLightCsc"]
+__all__ = ["ATWhiteLightCsc", "run_atwhitelight"]
 
+import asyncio
 import copy
 import types
 
@@ -444,3 +445,8 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
                     code=ErrorCode.NOT_CHILLING_WITH_LAMP_ON,
                     report="Chiller pump is off",
                 )
+
+
+def run_atwhitelight() -> None:
+    """Run the ATWhiteLight CSC."""
+    asyncio.run(ATWhiteLightCsc.amain(index=None))
