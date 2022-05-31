@@ -26,6 +26,7 @@ __all__ = [
 import asyncio
 import concurrent
 import functools
+import socket
 import types
 
 from .lamp_base import LabJackChannels
@@ -96,15 +97,17 @@ class LabJackInterface:
 
         Disconnect first, if connected.
         """
+        self.log.info(
+            f"Connect to LabJack {self.device_type}, "
+            f"config.identifier={self.identifier!r}, "
+            f"config.connection_type={self.connection_type}"
+        )
         try:
             await self._run_in_thread(
                 func=self._blocking_connect, timeout=CONNECT_TIMEOUT
             )
         except Exception as e:
-            self.log.error(
-                f"Could not connect to LabJack device_type={self.device_type!r}, "
-                f"connection_type={self.connection_type!r}, identifier={self.identifier!r}: {e!r}"
-            )
+            self.log.error(f"Could not connect to LabJack: {e!r}")
             raise
 
     async def disconnect(self):
@@ -194,8 +197,8 @@ class LabJackInterface:
             loop.run_in_executor(self._thread_pool, curried_func), timeout=timeout
         )
 
-    def _blocking_connect(self):
-        """Connect to the LabJack and check we can read the specified channels.
+    def _blocking_connect(self) -> None:
+        """Connect to the LabJack.
 
         Disconnect first, if connected.
 
@@ -207,8 +210,13 @@ class LabJackInterface:
 
         if self.simulate:
             identifier = MOCK_IDENTIFIER
+            self.log.info(f"simulation mode, so identifier changed to {identifier!r}")
         else:
             identifier = self.identifier
+            if self.connection_type in {"TCP", "WIFI"}:
+                # Resolve domain name, since ljm does not do this
+                identifier = socket.gethostbyname(identifier)
+                self.log.info(f"resolved identifier={identifier!r}")
 
         self.handle = ljm.openS(self.device_type, self.connection_type, identifier)
 
