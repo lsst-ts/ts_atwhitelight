@@ -70,7 +70,7 @@ Start the ATWhiteLight CSC as follows:
 
 .. prompt:: bash
 
-    run_atwhitelight.py
+    run_atwhitelight
 
 Stop the CSC by sending it to the OFFLINE state.
 
@@ -119,7 +119,7 @@ The CSC includes a simulation mode. To run using simulation:
 
 .. prompt:: bash
 
-    run_atwhitelight.py --simulate
+    run_atwhitelight --simulate
 
 Developer Guide
 ===============
