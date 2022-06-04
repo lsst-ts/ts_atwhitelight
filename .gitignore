@@ -11,3 +11,5 @@ version.py
 .eggs
 *.egg_info
 .vscode
+
+.vscode
