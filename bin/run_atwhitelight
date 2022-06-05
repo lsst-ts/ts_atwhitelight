@@ -1,0 +1,6 @@
+#!/usr/bin/env python
+
+from lsst.ts.atwhitelight import run_atwhitelight
+
+
+run_atwhitelight()

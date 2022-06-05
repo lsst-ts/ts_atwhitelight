@@ -1,10 +1,19 @@
-#!/usr/bin/env python
+__all__ = ["command_atwhitelight"]
 
 import asyncio
+
 from lsst.ts import salobj
 
 
 class ATWhiteLightCommander(salobj.CscCommander):
+    """ATWhiteLight commander.
+
+    Parameters
+    ----------
+    enable : bool
+        Enable the CSC when first connecting to it?
+    """
+
     def __init__(self, enable):
         super().__init__(
             name="ATWhiteLight",
@@ -14,4 +23,6 @@ class ATWhiteLightCommander(salobj.CscCommander):
         )
 
 
-asyncio.run(ATWhiteLightCommander.amain(index=None))
+def command_atwhitelight() -> None:
+    """Run the ATWhiteLight commander."""
+    asyncio.run(ATWhiteLightCommander.amain(index=None))

@@ -11,7 +11,9 @@ v0.3.0
 
 Changes:
 
+* Rename command-line scripts to remove ".py" suffix.
 * Add DNS name resolution for the LabJack connection.
+* Build with pyproject.toml.
 
 Requires:
 
