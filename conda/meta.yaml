@@ -7,6 +7,7 @@ source:
   path: ../
 
 build:
+  noarch: generic
   script: python -m pip install --no-deps --ignore-installed .
   entry_points:
     - command_atwhitelight = lsst.ts.atwhitelight:command_atwhitelight
@@ -28,6 +29,7 @@ test:
     - ts-dds
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
+    - ts-tcpip
   source_files:
     - python
     - bin
@@ -49,4 +51,4 @@ requirements:
     - setuptools
     - setuptools_scm
     - ts-salobj
-    - pymodbus
+    - ts-tcpip
