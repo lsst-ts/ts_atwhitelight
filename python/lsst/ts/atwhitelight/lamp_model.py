@@ -507,7 +507,7 @@ class LampModel:
             Lamp power. Must be in the range [800, 1200] W, inclusive.
 
         Raises
-        -------
+        ------
         salobj.ExpectedError
             If the lamp is already on, or is off but still cooling down.
         """
