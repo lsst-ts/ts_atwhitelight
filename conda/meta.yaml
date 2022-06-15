@@ -13,16 +13,6 @@ build:
     - command_atwhitelight = lsst.ts.atwhitelight:command_atwhitelight
     - run_atwhitelight = lsst.ts.atwhitelight:run_atwhitelight
 
-  script_env:
-    - PATH
-    - PYTHONPATH
-    - LD_LIBRARY_PATH
-    - OSPL_HOME
-    - PYTHON_BUILD_VERSION
-    - PYTHON_BUILD_LOCATION
-    - TS_CONFIG_ATCALSYS_DIR
-    - LSST_DDS_DOMAIN
-
 test:
   requires:
     - ts-conda-build =0.3
@@ -30,6 +20,7 @@ test:
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
     - ts-tcpip
+    - labjack-ljm
   source_files:
     - python
     - bin
