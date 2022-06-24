@@ -2,7 +2,7 @@
 ts_atwhitelight
 ###############
 
-ts_atwhitelight controls the Vera C. Rubin Observatory Auxiliary Telescope white light calibration source.
+A CSC to control the white light calibration source for the Vera C. Rubin Observatory Auxiliary Telescope.
 
 This light source feeds a monochromator (ATMonochromator), which in turns illuminates the flat field screen.
 

@@ -1,2 +1,2 @@
 @Library('JenkinsShared')_
-CondaPipeline(["ts_config_atcalsys"], "ts-atwhitelight", "lsst.ts.atwhitelight")
+CondaPipeline(["ts_config_atcalsys"], "ts-atwhitelight", "lsst.ts.atwhitelight", "noarch")

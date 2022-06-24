@@ -1,3 +1,4 @@
+.hypothesis
 .pytest_cache
 .coverage*
 pytest_session.txt
@@ -9,4 +10,6 @@ tests/measurements/*.json
 version.py
 .eggs
 *.egg_info
+.vscode
+
 .vscode

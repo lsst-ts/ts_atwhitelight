@@ -376,7 +376,7 @@ class LampModel:
             if self.get_remaining_cooldown() > 0:
                 basic_state = LampBasicState.COOLDOWN
             elif controller_cooling:
-                self.log.into(
+                self.log.info(
                     "Setting lampState.basicState=COOLDOWN because "
                     "lamp controller is in cooldown"
                 )
@@ -507,7 +507,7 @@ class LampModel:
             Lamp power. Must be in the range [800, 1200] W, inclusive.
 
         Raises
-        -------
+        ------
         salobj.ExpectedError
             If the lamp is already on, or is off but still cooling down.
         """

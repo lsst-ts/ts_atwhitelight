@@ -33,4 +33,5 @@ from .labjack_interface import *
 from .lamp_model import *
 from .mock_chiller import *
 from .mock_labjack_interface import *
+from .atwhitelight_commander import *
 from .atwhitelight_csc import *

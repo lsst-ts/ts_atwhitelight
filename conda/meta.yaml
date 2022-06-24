@@ -7,16 +7,11 @@ source:
   path: ../
 
 build:
+  noarch: generic
   script: python -m pip install --no-deps --ignore-installed .
-  script_env:
-    - PATH
-    - PYTHONPATH
-    - LD_LIBRARY_PATH
-    - OSPL_HOME
-    - PYTHON_BUILD_VERSION
-    - PYTHON_BUILD_LOCATION
-    - TS_CONFIG_ATCALSYS_DIR
-    - LSST_DDS_DOMAIN
+  entry_points:
+    - command_atwhitelight = lsst.ts.atwhitelight:command_atwhitelight
+    - run_atwhitelight = lsst.ts.atwhitelight:run_atwhitelight
 
 test:
   requires:
@@ -24,11 +19,14 @@ test:
     - ts-dds
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
+    - ts-tcpip
+    - labjack-ljm
   source_files:
     - python
     - bin
     - tests
     - setup.cfg
+    - pyproject.toml
   commands:
     - py.test
 
@@ -44,4 +42,4 @@ requirements:
     - setuptools
     - setuptools_scm
     - ts-salobj
-    - pymodbus
+    - ts-tcpip

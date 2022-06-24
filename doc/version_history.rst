@@ -6,6 +6,27 @@
 Version History
 ###############
 
+v0.2.0
+------
+
+Changes:
+
+* `ATWhiteLightCsc`: call ``super().start()`` at the beginning of the start method.
+  This requires ts_salobj 7.1.
+* Rename command-line scripts to remove ".py" suffix.
+* Build with pyproject.toml.
+* ``CONFIG_SCHEMA``: fix the id field to point to the actual file.
+* ``setup.cfg``: set asyncio_mode = auto.
+* Jenkinsfile: work around a new git issue.
+
+Requires:
+
+* ts_idl
+* ts_salobj 7.1
+* ts_tcpip
+* ts_utils
+* IDL file for ATWhiteLight built from ts_xml 11.1
+
 v0.1.1
 ------
 
