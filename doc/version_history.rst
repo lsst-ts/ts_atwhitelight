@@ -17,6 +17,7 @@ Changes:
 * Build with pyproject.toml.
 * ``CONFIG_SCHEMA``: fix the id field to point to the actual file.
 * ``setup.cfg``: set asyncio_mode = auto.
+* Jenkinsfile: work around a new git issue.
 
 Requires:
 

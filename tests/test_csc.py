@@ -73,6 +73,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             with pytest.raises(salobj.AckError):
                 await self.remote.cmd_standby.start()
 
+    async def test_bin_script(self):
+        await self.check_bin_script(
+            name="ATWhiteLight",
+            index=None,
+            exe_name="run_atwhitelight",
+        )
+
     async def test_chiller_alarms(self):
         """Test reporting of chiller alarms and warnings."""
         # Don't bother enabling the CSC; the focus is on connecting
