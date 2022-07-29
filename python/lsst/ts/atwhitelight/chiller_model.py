@@ -761,7 +761,6 @@ class ChillerModel:
             raise ConnectedError("Not connected")
 
         reply = await self.client.run_command(cmd)
-        self.log.debug("Read reply=%s", reply)
 
         if len(reply) < 14:
             err_msg = f"Command {cmd} failed: reply={reply!r}"
