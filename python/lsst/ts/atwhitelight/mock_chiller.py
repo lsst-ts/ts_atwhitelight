@@ -150,8 +150,14 @@ class MockChiller(tcpip.OneClientServer):
         self.log.info("command_loop ends")
 
     def format_mask(self, value, ndig, name):
-        """Format a hex mask return data, e.g. alarms and warnings"""
-        ret = f"{value:0{ndig}X}"
+        """Format a hex mask return data, e.g. alarms and warnings.
+
+        Note that the string is in reverse order, e.g.
+        value=0x12, ndig=4 is returned as "2100".
+        See note in `lsst.ts.idl.enums.ATWhiteLight.ChillerL1Alarms`
+        for the reason.
+        """
+        ret = f"{value:0{ndig}X}"[::-1]
         if len(ret) > ndig:
             self.log.warning(f"truncating {name}={ret} to {ndig} chars; value={value}")
         return ret
