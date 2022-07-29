@@ -647,6 +647,11 @@ class ChillerModel:
         )
 
         if alarms_present:
+            # Explicitly stop chilling, to avoid the user interface
+            # from reporting a "mode mismatch alarm" that requires
+            # power cycling the chiller.
+            await self.do_set_chiller_status(0)
+
             # Get detailed alarm information
             self.seen_alarms = set()
             await self.do_read_l1_alarms()
