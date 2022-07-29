@@ -139,11 +139,10 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             if self.summary_state == salobj.State.ENABLED:
                 chiller_watchdog = self.chiller_model.get_watchdog()
                 if chiller_watchdog.alarmsPresent:
-                    await self.fault(
+                    return await self.fault(
                         code=ErrorCode.CHILLER_ERROR,
                         report="Chiller is reporting alarms",
                     )
-                    return
             if not self.lamp_connected:
                 await self.connect_lamp()
             self.should_be_connected = True
@@ -401,18 +400,16 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
 
         # Handle reasons to go to fault state
         if not self.lamp_connected:
-            await self.fault(
+            return await self.fault(
                 code=ErrorCode.LAMP_DISCONNECTED,
                 report="Lamp controller disconnected",
             )
-            return
 
         if not self.chiller_connected:
-            await self.fault(
+            return await self.fault(
                 code=ErrorCode.CHILLER_DISCONNECTED,
                 report="Chiller controller disconnected",
             )
-            return
 
         lamp_state = self.lamp_model.get_state()
         if lamp_state.controllerError != LampControllerError.NONE:
@@ -420,28 +417,27 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             # because it will almost always be UNKNOWN
             # (the blinking error signal won't have been decoded yet)
             # and that is not useful information.
-            await self.fault(
+            return await self.fault(
                 code=ErrorCode.LAMP_ERROR,
                 report="Lamp controller is reporting an error",
             )
-            return
 
         chiller_watchdog = self.chiller_model.get_watchdog()
         if chiller_watchdog.alarmsPresent:
-            await self.fault(
+            return await self.fault(
                 code=ErrorCode.CHILLER_ERROR, report="Chiller reporting alarms"
             )
 
         # Fault if the lamp is on and the chiller is not chilling
         if self.lamp_model.lamp_on:
             if chiller_watchdog.controllerState != ChillerControllerState.RUN:
-                await self.fault(
+                return await self.fault(
                     code=ErrorCode.NOT_CHILLING_WITH_LAMP_ON,
                     report="Chiller is not running; "
                     f"controller state={chiller_watchdog.controllerState!r}",
                 )
             if not chiller_watchdog.pumpRunning:
-                await self.fault(
+                return await self.fault(
                     code=ErrorCode.NOT_CHILLING_WITH_LAMP_ON,
                     report="Chiller pump is off",
                 )
