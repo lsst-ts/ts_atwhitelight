@@ -37,6 +37,17 @@ There are a few quirks that I did not find described in the manuals:
   Barry Houtchen says "it is usually seen when a command is sent to the chiller with a parameter that is out of bounds (for example, trying to set the temperature a number greater than 45C)".
   This is surprising because there is also a documented error code (3) for parameter out of bounds, which can be returned using a normally formatted response.
   In any case we see "#23\r" in response to 16sCtrlSen.
+* Command 18 "Read Alarm State Level 1" also resets level 1 alarms (even if they are latched).
+  (Command 19 "Read Alarm State Level 2" does not reset alarms).
+  Resetting an alarm while leaving the chiller in standby can cause a serious problem, due to a Chiller bug:
+
+  * The user interface code checks alarms every 1.5 seconds.
+  * If an alarm occurs that puts the chiller in standby and the alarm is reset by command 18 during this 1.5 seconds, the user interface code will display a "mode mismatch alarm" which requires power cycling the chiller.
+
+  We have worked around this by explicitly commanding the chiller standby as soon as the watchdog reports that there is an alarm.
+  This avoids the mode mismatch alarm because the user interface will see that the chiller has been commanded to be in standby.
+  Note that the chiller should already be in standby due to the alarm, so this should not reduce chilling.
+
 * The value reported for the return coolant temeperature sensor is not correct (far too low).
   We don't know why.
 

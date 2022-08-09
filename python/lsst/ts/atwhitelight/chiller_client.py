@@ -111,13 +111,13 @@ class ChillerClient:
         full_cmd = self.format_full_command(cmd).encode("ascii")
 
         async with self.communication_lock:
-            self.log.debug(f"Run command {full_cmd}")
+            self.log.debug(f"Run chiller command {full_cmd}")
             self.writer.write(full_cmd)
             await self.writer.drain()
             reply = await asyncio.wait_for(
                 self.reader.readuntil(separator=b"\r"), timeout=self.command_timeout
             )
-        self.log.debug(f"Read reply {full_cmd}")
+        self.log.debug(f"Read chiller reply {reply}")
         return reply.decode()[:-3]
 
     def format_full_command(self, cmd):
