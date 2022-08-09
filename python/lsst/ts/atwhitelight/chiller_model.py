@@ -542,7 +542,10 @@ class ChillerModel:
             self.seen_fan_speeds = set()
 
     async def handle_read_l1_alarms(self, data):
-        mask = int(data, 16)
+        # Reverse the alarm string before parsing it as a hex integer.
+        # See note in lsst.ts.idl.enums.ATWhiteLight.ChillerL1Alarms
+        # for the reason.
+        mask = int(data[::-1], 16)
         self.seen_alarms.add("level1")
         self.topics.evt_chillerAlarms.set(level1=mask)
         if len(self.seen_alarms) == 3:
@@ -551,7 +554,10 @@ class ChillerModel:
 
     async def handle_read_l2_alarms(self, data):
         sublevel = data[0]
-        mask = int(data[1:], 16)
+        # Reverse the alarm string before parsing it as a hex integer.
+        # See note in lsst.ts.idl.enums.ATWhiteLight.ChillerL1Alarms
+        # for the reason.
+        mask = int(data[1:][::-1], 16)
         if sublevel == "1":
             self.seen_alarms.add("level21")
             self.topics.evt_chillerAlarms.set(level21=mask)
@@ -597,7 +603,10 @@ class ChillerModel:
             self.seen_temperatures = set()
 
     async def handle_read_warnings(self, data):
-        mask = int(data, 16)
+        # Reverse the alarm string before parsing it as a hex integer.
+        # See note in lsst.ts.idl.enums.ATWhiteLight.ChillerL1Alarms
+        # for the reason.
+        mask = int(data[::-1], 16)
         await self.topics.evt_chillerWarnings.set_write(warnings=mask)
 
     async def handle_set_alarm_threshold(self, data):
@@ -638,6 +647,11 @@ class ChillerModel:
         )
 
         if alarms_present:
+            # Explicitly stop chilling, to avoid the user interface
+            # from reporting a "mode mismatch alarm" that requires
+            # power cycling the chiller.
+            await self.do_set_chiller_status(0)
+
             # Get detailed alarm information
             self.seen_alarms = set()
             await self.do_read_l1_alarms()
@@ -761,7 +775,6 @@ class ChillerModel:
             raise ConnectedError("Not connected")
 
         reply = await self.client.run_command(cmd)
-        self.log.debug("Read reply=%s", reply)
 
         if len(reply) < 14:
             err_msg = f"Command {cmd} failed: reply={reply!r}"
