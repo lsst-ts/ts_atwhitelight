@@ -6,12 +6,13 @@
 Version History
 ###############
 
-v0.2.1
+v0.2.2
 ------
 
 Changes:
 
 * Fix LabJack channel assignments; they were scrambled.
+* Developer Guide: add a link to TSTN-036.
 
 Requires:
 
