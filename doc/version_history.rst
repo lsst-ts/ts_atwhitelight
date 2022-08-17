@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v0.2.2
+------
+
+Changes:
+
+* Fix LabJack channel assignments; they were scrambled.
+* Developer Guide: add a link to TSTN-036.
+
+Requires:
+
+* ts_idl
+* ts_salobj 7.1
+* ts_tcpip
+* ts_utils
+* IDL file for ATWhiteLight built from ts_xml 11.1
+
 v0.2.1
 ------
 

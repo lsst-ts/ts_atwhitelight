@@ -22,11 +22,11 @@ The white light system consists of three components:
 
 * A ThermoTek T257P chiller.
 
-The CSC controls the lamp controller and linear actuator using a LabJack T4 I/O module via the `LabJack ljm library <https://labjack.com/ljm>`_.
+The KiloArc lamp controller and the shutter are both controlled by a LabJack T4 I/O module, as described in `TSTN-036 <https://tstn-036.lsst.io/>`_.
+The CSC controls the lamp controller and shutter LabJack via the `LabJack ljm library <https://labjack.com/ljm>`_.
 
 The CSC controls the ThermoTek chiller via a TCP/IP to RS-232 adapter connected to the chiller's RS-232 interface.
-The communication protocol is described in detail in :download:`TTK Serial Communication Protocol.<TTK Serial Communication Protocol.pdf>`.
-The chiller will ignore new commands until it has responded to the currently executing command.
+The chiller's communication protocol is described in detail in :download:`TTK Serial Communication Protocol.<TTK Serial Communication Protocol.pdf>`.
 There are a few quirks that I did not find described in the manuals:
 
 * The T247P can only use the source coolant temperature sensor as the control sensor.

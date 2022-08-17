@@ -63,10 +63,10 @@ class LabJackChannels:
     """
 
     read = dict(
-        standby_or_on="FIO4",
-        error="FIO5",
-        cooldown="FIO6",
-        blinking_error="FIO7",
+        blinking_error="FIO4",
+        cooldown="FIO5",
+        standby_or_on="FIO6",
+        error_exists="FIO7",
         shutter_open="EIO4",
         shutter_closed="EIO6",
     )
