@@ -230,7 +230,7 @@ class LampModel:
                 data = await self.labjack.read()
                 current_tai = utils.current_tai()
 
-                if data.error:
+                if data.error_exists:
                     # Try to decode the blinking error
                     if self.topics.evt_lampState.has_data:
                         controller_error = (
@@ -308,7 +308,7 @@ class LampModel:
                     self.blinking_error_was_on = False
                     self.blinking_error_gap_seen = True
 
-                if data.error:
+                if data.error_exists:
                     controller_state = LampControllerState.ERROR
                 elif data.standby_or_on:
                     controller_state = LampControllerState.STANDBY_OR_ON

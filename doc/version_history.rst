@@ -11,6 +11,21 @@ v0.2.1
 
 Changes:
 
+* Fix LabJack channel assignments; they were scrambled.
+
+Requires:
+
+* ts_idl
+* ts_salobj 7.1
+* ts_tcpip
+* ts_utils
+* IDL file for ATWhiteLight built from ts_xml 11.1
+
+v0.2.1
+------
+
+Changes:
+
 * Work around a chiller bug that causes the chiller to hang with "MODE MISMATCH ALARM" displayed on the panel, requiring power cycling.
 * `ATWhiteLightCsc`: fix a bug whereby the CSC could try to fault when already in fault state.
 * `ChillerModel`: fix incorrect values reported for alarms and warnings.

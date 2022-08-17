@@ -129,7 +129,7 @@ class MockLabJackInterface(LabJackInterface):
                 data.cooldown = True
         else:
             data.standby_or_on = True
-        data.error = int(self.controller_error != LampControllerError.NONE)
+        data.error_exists = int(self.controller_error != LampControllerError.NONE)
         data.blinking_error = self.blinking_error
         data.shutter_open = self.shutter_open_switch
         data.shutter_closed = self.shutter_closed_switch
