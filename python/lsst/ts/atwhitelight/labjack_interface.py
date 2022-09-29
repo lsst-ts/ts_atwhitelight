@@ -25,11 +25,21 @@ __all__ = [
 
 import asyncio
 import concurrent
+import dataclasses
 import functools
 import socket
-import types
 
-from .lamp_base import LabJackChannels
+from lsst.ts import utils
+
+from .lamp_base import (
+    LabJackChannels,
+    SHUTTER_ENABLE,
+    SHUTTER_DISABLE,
+    SHUTTER_OPEN,
+    SHUTTER_CLOSE,
+    VOLTS_AT_MIN_POWER,
+    VOLTS_AT_MAX_POWER,
+)
 
 # Hide my error `Module "labjack" has no attribute "ljm"`
 from labjack import ljm  # type: ignore
@@ -42,6 +52,23 @@ READ_WRITE_TIMEOUT = 5
 
 # LabJack's special identifier to run in simulation mode.
 MOCK_IDENTIFIER = "LJM_DEMO_MODE"
+
+# Duration of lamp controller's cooldown timer (seconds).
+# This should be shorter than the CSC's config.lamp.cooldown_duration
+# in order to be realistic.
+COOLDOWN_DURATION = 4
+
+
+@dataclasses.dataclass
+class MockedReadValues:
+    """Read values that we simulate"""
+
+    blinking_error: int = 0
+    cooldown: int = 0
+    standby_or_on: int = 0
+    error_exists: int = 0
+    shutter_open: int = 0
+    shutter_closed: int = 1
 
 
 class LabJackInterface:
@@ -82,11 +109,33 @@ class LabJackInterface:
         self.connection_type = connection_type
         self.simulate = simulate
 
+        # Time to open or close the shutter (seconds)
+        self.shutter_duration = 1
+
+        self.cooldown_duration = COOLDOWN_DURATION
+
+        self.do_open_shutter = False
+        self.shutter_open_switch = False
+        self.shutter_closed_switch = True
+        self.shutter_enabled = False
+        self.lamp_on = False
+        self.lamp_off_time = 0
+
+        self.move_shutter_task = utils.make_done_future()
+
         # handle to LabJack device
         self.handle = None
 
         # The thread pool executor used by `_run_in_thread`.
         self._thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+        # Read constants
+        self.read_constants = dict(
+            error_exists=0,
+            blinking_error=0,
+        )
+
+        self.mocked_read_values = MockedReadValues()
 
     @property
     def connected(self):
@@ -119,6 +168,18 @@ class LabJackInterface:
         finally:
             self.handle = None
 
+    async def move_shutter(self):
+        if self.do_open_shutter:
+            self.shutter_closed_switch = False
+            if not self.shutter_open_switch:
+                await asyncio.sleep(self.shutter_duration)
+                self.shutter_open_switch = True
+        else:
+            self.shutter_open_switch = False
+            if not self.shutter_closed_switch:
+                await asyncio.sleep(self.shutter_duration)
+                self.shutter_closed_switch = True
+
     async def read(self):
         """Read all channels specified in LabjackChannels.read.
 
@@ -127,27 +188,20 @@ class LabJackInterface:
         data : `types.SimpleNamespace`
             Struct of label=value, where label is a key in LabjackChannels.read
         """
-        channels = list(LabJackChannels.read.values())
-        try:
-            values = await self._run_in_thread(
-                func=self._blocking_read,
-                channels=channels,
-                timeout=READ_WRITE_TIMEOUT,
-            )
-        except Exception as e:
-            self.log.error(
-                f"Read channels={channels!r} from LabJack handle={self.handle!r} "
-                f"failed: {e!r}"
-            )
-            raise
-        if len(values) != len(LabJackChannels.read):
-            raise RuntimeError(
-                f"The number of read values {values} does not match the number of channels {channels}"
-            )
-        channel_dict = {
-            label: value for label, value in zip(LabJackChannels.read.keys(), values)
-        }
-        return types.SimpleNamespace(**channel_dict)
+        # All read data is simulated
+        self.mocked_read_values.standby_or_on = False
+        self.mocked_read_values.cooldown = False
+        if not self.lamp_on:
+            off_duration = utils.current_tai() - self.lamp_off_time
+            if off_duration > self.cooldown_duration:
+                self.mocked_read_values.standby_or_on = True
+            else:
+                self.mocked_read_values.cooldown = True
+        else:
+            self.mocked_read_values.standby_or_on = True
+        self.mocked_read_values.shutter_open = self.shutter_open_switch
+        self.mocked_read_values.shutter_closed = self.shutter_closed_switch
+        return self.mocked_read_values
 
     async def write(self, **kwargs):
         """Write to one or more labelled channels.
@@ -157,24 +211,58 @@ class LabJackInterface:
         kwargs : `dict`
             Dict of label: value, where label is a key in LabJackChannels.write
         """
+        # The only data to write is `set_power`;
+        # parse the others to mock the appropriate behavior.
         bad_labels = kwargs.keys() - LabJackChannels.write.keys()
         if bad_labels:
             raise ValueError(f"Unrecognized labels={sorted(bad_labels)}")
-        try:
-            channel_dict = {
-                LabJackChannels.write[label]: value for label, value in kwargs.items()
-            }
-            await self._run_in_thread(
-                self._blocking_write,
-                channel_dict=channel_dict,
-                timeout=READ_WRITE_TIMEOUT,
-            )
-        except Exception as e:
-            self.log.error(
-                f"Write channel_dict={channel_dict!r} "
-                f"to LabJack handle={self.handle!r} failed: {e!r}"
-            )
-            raise
+
+        # Translate set_power label from a power to 0/1,
+        # because the hack drives a digital output, not an analog output.
+        # Fail if set_power out of range.
+        # Turn on the lamp if set_power > 0
+        # Turn off the lamp otherwise
+        set_power = kwargs.get("set_power", None)
+        if set_power is not None:
+            lamp_on = True
+            if set_power == 0:
+                lamp_on = False
+                self.lamp_off_time = utils.current_tai()
+            elif set_power < VOLTS_AT_MIN_POWER or set_power > VOLTS_AT_MAX_POWER:
+                raise RuntimeError(
+                    f"Invalid set_power={set_power} must be 0 or in range "
+                    f"[{VOLTS_AT_MIN_POWER}, {VOLTS_AT_MAX_POWER}] V"
+                )
+            try:
+                channel_dict = {LabJackChannels.write["set_power"]: lamp_on}
+                await self._run_in_thread(
+                    self._blocking_write,
+                    channel_dict=channel_dict,
+                    timeout=READ_WRITE_TIMEOUT,
+                )
+            except Exception as e:
+                self.log.error(
+                    f"Write channel_dict={channel_dict!r} "
+                    f"to LabJack handle={self.handle!r} failed: {e!r}"
+                )
+                raise
+            self.lamp_on = lamp_on
+
+        shutter_direction = kwargs.get("shutter_direction")
+        if shutter_direction is not None:
+            self.do_open_shutter = {SHUTTER_OPEN: True, SHUTTER_CLOSE: False}[
+                shutter_direction
+            ]
+
+        shutter_enable = kwargs.get("shutter_enable")
+        if shutter_enable is not None:
+            self.move_shutter_task.cancel()
+            self.shutter_enabled = shutter_enable
+            do_enable_shutter = {SHUTTER_ENABLE: True, SHUTTER_DISABLE: False}[
+                shutter_enable
+            ]
+            if do_enable_shutter:
+                self.move_shutter_task = asyncio.create_task(self.move_shutter())
 
     async def _run_in_thread(self, func, timeout, **kwargs):
         """Run a blocking function in a thread pool executor.

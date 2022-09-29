@@ -25,7 +25,6 @@ import asyncio
 import inspect
 
 from .labjack_interface import LabJackInterface
-from .mock_labjack_interface import MockLabJackInterface
 
 from lsst.ts import salobj
 from lsst.ts import utils
@@ -122,11 +121,7 @@ class LampModel:
         # cleared otherwise.
         self.status_event = asyncio.Event()
 
-        if simulate:
-            interface_class = MockLabJackInterface
-        else:
-            interface_class = LabJackInterface
-        self.labjack = interface_class(
+        self.labjack = LabJackInterface(
             identifier=self.config.identifier,
             log=self.log,
             device_type=self.config.device_type,
