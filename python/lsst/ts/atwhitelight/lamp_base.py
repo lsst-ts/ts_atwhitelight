@@ -60,6 +60,10 @@ class LabJackChannels:
     All inputs are 1 if active/on.
 
     Outputs use the ``SHUTTER_x`` constants above.
+
+    In this LED hack only ``set_power`` is actually written, and it must be
+    changed from a voltage to 0 or 1 before being sent to the LabJack.
+    All the other channels are simulated.
     """
 
     read = dict(
@@ -71,7 +75,7 @@ class LabJackChannels:
         shutter_closed="EIO6",
     )
     write = dict(
-        set_power="DAC0",
+        set_power="FIO0",  # 1=LED on, 0=LED off
         shutter_enable="EIO3",  # 0=enable
         shutter_direction="EIO2",  # 0=open
     )

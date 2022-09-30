@@ -234,7 +234,7 @@ class LabJackInterface:
                     f"[{VOLTS_AT_MIN_POWER}, {VOLTS_AT_MAX_POWER}] V"
                 )
             try:
-                channel_dict = {LabJackChannels.write["set_power"]: lamp_on}
+                channel_dict = {LabJackChannels.write["set_power"]: 1 if lamp_on else 0}
                 await self._run_in_thread(
                     self._blocking_write,
                     channel_dict=channel_dict,
