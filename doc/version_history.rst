@@ -6,6 +6,13 @@
 Version History
 ###############
 
+ledhack v0.3.beta.101
+---------------------
+
+Changes:
+
+* Minor tweaks for clarity.
+
 ledhack v0.3.beta.100
 ---------------------
 
