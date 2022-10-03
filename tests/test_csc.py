@@ -367,61 +367,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             assert data.isCooling == mock_chiller.is_cooling
             assert data.level == pytest.approx(mock_chiller.tec_drive_level, abs=0.5)
 
-    async def test_decode_lamp_errors(self):
-        # Use DISABLED state so the lamp is not forced off (which generates
-        # extra lampState events that complicate the test).
-        async with self.make_csc(
-            initial_state=salobj.State.DISABLED,
-            config_dir=TEST_CONFIG_DIR,
-            simulation_mode=1,
-        ):
-            await self.assert_next_summary_state(state=salobj.State.DISABLED)
-            while True:
-                data = await self.remote.evt_lampState.next(
-                    flush=False, timeout=STD_TIMEOUT
-                )
-                assert data.controllerError == LampControllerError.NONE
-                if (
-                    data.controllerState == LampControllerState.STANDBY_OR_ON
-                    and data.setPower == 0
-                ):
-                    break
-
-            self.csc.lamp_model.labjack.set_error(LampControllerError.ACCESS_DOOR)
-            data = await self.remote.evt_lampState.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
-            assert data.controllerError == LampControllerError.UNKNOWN
-            await self.assert_next_summary_state(salobj.State.FAULT)
-
-            # Required time to decode the blinking error signal
-            # is the value of the error enum + 1 second
-            decode_duration = int(LampControllerError.ACCESS_DOOR) + 1
-            data = await self.remote.evt_lampState.next(
-                flush=False, timeout=STD_TIMEOUT + decode_duration
-            )
-            assert data.controllerError == LampControllerError.ACCESS_DOOR
-
-            self.csc.lamp_model.labjack.set_error(LampControllerError.NONE)
-            data = await self.remote.evt_lampState.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
-            assert data.controllerError == LampControllerError.NONE
-
-            # Now test an error code that is larger than any known
-            too_large_error_code = max(LampControllerError) + 1
-            self.csc.lamp_model.labjack.set_error(too_large_error_code)
-            data = await self.remote.evt_lampState.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
-            assert data.controllerError == LampControllerError.UNKNOWN
-
-            await asyncio.sleep(too_large_error_code + 1)
-            assert (
-                self.csc.evt_lampState.data.controllerError
-                == LampControllerError.UNKNOWN
-            )
-
     async def test_lamp_disconnect_fault(self):
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
@@ -497,61 +442,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 controllerState=LampControllerState.COOLDOWN,
                 controllerError=LampControllerError.NONE,
             )
-
-    async def test_lamp_error_turns_lamp_off(self):
-        async with self.make_csc(
-            initial_state=salobj.State.ENABLED,
-            config_dir=TEST_CONFIG_DIR,
-            simulation_mode=1,
-        ):
-            await self.assert_next_summary_state(state=salobj.State.ENABLED)
-            await self.assert_next_sample(
-                topic=self.remote.evt_errorCode,
-                errorCode=0,
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampState,
-                basicState=LampBasicState.OFF,
-                controllerState=LampControllerState.STANDBY_OR_ON,
-                controllerError=LampControllerError.NONE,
-            )
-
-            await self.remote.cmd_startChiller.start()
-
-            await self.remote.cmd_turnLampOn.start()
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampState,
-                basicState=LampBasicState.WARMUP,
-                controllerState=LampControllerState.STANDBY_OR_ON,
-                controllerError=LampControllerError.NONE,
-            )
-
-            # Put lamp controller into error state; any error will do
-            self.csc.lamp_model.labjack.set_error(LampControllerError.LAMP_STUCK_ON)
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampState,
-                basicState=LampBasicState.WARMUP,
-                controllerState=LampControllerState.ERROR,
-                controllerError=LampControllerError.UNKNOWN,
-            )
-
-            # The CSC should react by going to fault and turning off the lamp
-            # but leave the lamp and chiller connected.
-            await self.assert_next_summary_state(salobj.State.FAULT)
-            await self.assert_next_sample(
-                topic=self.remote.evt_errorCode,
-                errorCode=ErrorCode.LAMP_ERROR,
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampState,
-                basicState=LampBasicState.COOLDOWN,
-                controllerState=LampControllerState.ERROR,
-                controllerError=LampControllerError.UNKNOWN,
-            )
-            assert self.csc.chiller_connected
-            assert self.csc.lamp_connected
-
-            await self.check_fault_to_standby_while_cooling(can_recover=False)
 
     async def test_reconnect(self):
         async with self.make_csc(

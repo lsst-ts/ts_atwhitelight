@@ -6,6 +6,28 @@
 Version History
 ###############
 
+ledhack v0.3.beta.101
+---------------------
+
+Changes:
+
+* Minor tweaks for clarity.
+
+ledhack v0.3.beta.100
+---------------------
+
+Changes:
+
+* A hacked version that controls temporarly LED lamps (and only pretends to control the chiller).
+
+Requires:
+
+* ts_idl
+* ts_salobj 7.1
+* ts_tcpip
+* ts_utils
+* IDL file for ATWhiteLight built from ts_xml 11.1
+
 v0.2.2
 ------
 

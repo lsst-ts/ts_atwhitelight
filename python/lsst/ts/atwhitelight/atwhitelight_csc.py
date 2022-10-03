@@ -174,7 +174,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
                 topics=self,
                 log=self.log,
                 status_callback=self.status_callback,
-                simulate=self.simulation_mode != 0,
+                simulate=True,
             )
         await self.chiller_model.connect()
 
@@ -233,6 +233,9 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
 
     async def start(self):
         await super().start()
+        self.log.warning(
+            "Hacked version that controls LED lamps and only pretends to control the chiller and shutter."
+        )
         await self.evt_lampConnected.set_write(connected=False)
         await self.evt_chillerConnected.set_write(connected=False)
         await self.evt_shutterState.set_write(
