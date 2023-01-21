@@ -189,6 +189,21 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
             await self.check_fault_to_standby_while_cooling(can_recover=False)
 
+    async def test_chiller_connect_timeout(self):
+        """Test that we cannot configure the chiller in time."""
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(salobj.State.STANDBY)
+            await self.remote.cmd_start.set_start(
+                configurationOverride="short_chiller_connect_timeout.yaml"
+            )
+            await self.assert_next_summary_state(salobj.State.FAULT)
+            await self.remote.cmd_standby.set_start()
+            await self.assert_next_summary_state(salobj.State.STANDBY)
+
     async def test_chiller_disconnect_turns_lamp_off(self):
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
@@ -421,6 +436,21 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 self.csc.evt_lampState.data.controllerError
                 == LampControllerError.UNKNOWN
             )
+
+    async def test_lamp_connect_timeout(self):
+        """Test that we cannot connect to the lamp in time."""
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(salobj.State.STANDBY)
+            await self.remote.cmd_start.set_start(
+                configurationOverride="short_lamp_connect_timeout.yaml"
+            )
+            await self.assert_next_summary_state(salobj.State.FAULT)
+            await self.remote.cmd_standby.set_start()
+            await self.assert_next_summary_state(salobj.State.STANDBY)
 
     async def test_lamp_disconnect_fault(self):
         async with self.make_csc(
