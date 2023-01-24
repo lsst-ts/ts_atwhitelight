@@ -9,9 +9,6 @@ source:
 build:
   noarch: generic
   script: python -m pip install --no-deps --ignore-installed .
-  entry_points:
-    - command_atwhitelight = lsst.ts.atwhitelight:command_atwhitelight
-    - run_atwhitelight = lsst.ts.atwhitelight:run_atwhitelight
 
 test:
   requires:

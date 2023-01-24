@@ -135,7 +135,13 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
     async def handle_summary_state(self):
         if self.disabled_or_enabled:
             if not self.chiller_connected:
-                await self.connect_chiller()
+                try:
+                    await self.connect_chiller()
+                except Exception as e:
+                    return await self.fault(
+                        code=ErrorCode.CHILLER_ERROR,
+                        report=f"Could not connect to the chiller: {e!r}",
+                    )
             if self.summary_state == salobj.State.ENABLED:
                 chiller_watchdog = self.chiller_model.get_watchdog()
                 if chiller_watchdog.alarmsPresent:
@@ -144,7 +150,13 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
                         report="Chiller is reporting alarms",
                     )
             if not self.lamp_connected:
-                await self.connect_lamp()
+                try:
+                    await self.connect_lamp()
+                except Exception as e:
+                    return await self.fault(
+                        code=ErrorCode.LAMP_ERROR,
+                        report=f"Could not connect to the lamp: {e!r}",
+                    )
             self.should_be_connected = True
         elif self.summary_state == salobj.State.FAULT:
             # Turn off the lamp, if connected
@@ -167,6 +179,13 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             await self.disconnect_chiller()
 
     async def connect_chiller(self):
+        """Connect to the chiller, configure it and get status.
+
+        Raises
+        ------
+        asyncio.TimeoutError
+            If it takes longer than self.config.chiller.connect_timeout
+        """
         await self.disconnect_chiller()
         if self.chiller_model is None:
             self.chiller_model = ChillerModel(
@@ -176,20 +195,30 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
                 status_callback=self.status_callback,
                 simulate=self.simulation_mode != 0,
             )
-        await self.chiller_model.connect()
+        await asyncio.wait_for(
+            self.chiller_model.connect(), timeout=self.config.chiller.connect_timeout
+        )
 
     async def connect_lamp(self):
+        """Connect to the lamp controller LabJack and get status.
+
+        Raises
+        ------
+        asyncio.TimeoutError
+            If it takes longer than self.config.lamp.connect_timeout
+        """
         await self.disconnect_lamp()
         if self.lamp_model is None:
-            labjack_config = self.config.lamp
             self.lamp_model = LampModel(
-                config=labjack_config,
+                config=self.config.lamp,
                 topics=self,
                 log=self.log,
                 status_callback=self.status_callback,
                 simulate=self.simulation_mode != 0,
             )
-        await self.lamp_model.connect()
+        await asyncio.wait_for(
+            self.lamp_model.connect(), timeout=self.config.lamp.connect_timeout
+        )
 
     async def disconnect_chiller(self):
         # Don't use chiller_connected because that can be false

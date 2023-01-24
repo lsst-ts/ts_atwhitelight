@@ -6,10 +6,22 @@
 Version History
 ###############
 
-v0.2.2
+v0.2.3
 ------
 
-Changes:
+* `ATWhiteLightCsc`: improve error handling for failure to connect to the chiller and lamp controller.
+* ``conda/meta.yaml``: remove redundant ``entry_points`` section.
+
+Requires:
+
+* ts_idl
+* ts_salobj 7.1
+* ts_tcpip
+* ts_utils
+* IDL file for ATWhiteLight built from ts_xml 11.1
+
+v0.2.2
+------
 
 * Fix LabJack channel assignments; they were scrambled.
 * Developer Guide: add a link to TSTN-036.
@@ -24,8 +36,6 @@ Requires:
 
 v0.2.1
 ------
-
-Changes:
 
 * Work around a chiller bug that causes the chiller to hang with "MODE MISMATCH ALARM" displayed on the panel, requiring power cycling.
 * `ATWhiteLightCsc`: fix a bug whereby the CSC could try to fault when already in fault state.
@@ -46,8 +56,6 @@ Requires:
 v0.2.0
 ------
 
-Changes:
-
 * `ATWhiteLightCsc`: call ``super().start()`` at the beginning of the start method.
   This requires ts_salobj 7.1.
 * Rename command-line scripts to remove ".py" suffix.
@@ -67,8 +75,6 @@ Requires:
 v0.1.1
 ------
 
-Changes:
-
 * Add a Jenkinsfile for continuous integration testing.
 
 Requires:
@@ -81,8 +87,6 @@ Requires:
 
 v0.1.0
 ------
-
-Changes:
 
 * The first version with documentation and a version history.
 * The first version to control the lamp controller using a LabJack I/O module.
