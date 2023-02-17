@@ -6,6 +6,20 @@
 Version History
 ###############
 
+v0.2.4
+------
+
+* pre-commit: update black to 23.1.0, isort to 5.12.0, mypy to 1.0.0, and pre-commit-hooks to v4.4.0.
+* ``Jenkinsfile``: do not run as root.
+
+Requires:
+
+* ts_idl
+* ts_salobj 7.1
+* ts_tcpip
+* ts_utils
+* IDL file for ATWhiteLight built from ts_xml 11.1
+
 v0.2.3
 ------
 
