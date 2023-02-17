@@ -24,14 +24,11 @@ __all__ = ["MockChiller"]
 import asyncio
 import functools
 
-from lsst.ts import tcpip
-from lsst.ts import utils
-from .chiller_client import ChillerClient
-from .chiller_base import (
-    ChillerControlSensor,
-    format_chiller_command_value,
-)
+from lsst.ts import tcpip, utils
 from lsst.ts.idl.enums.ATWhiteLight import ChillerControllerState
+
+from .chiller_base import ChillerControlSensor, format_chiller_command_value
+from .chiller_client import ChillerClient
 
 
 class MockChiller(tcpip.OneClientServer):
