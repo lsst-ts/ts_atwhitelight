@@ -24,16 +24,17 @@ __all__ = ["MockLabJackInterface"]
 import asyncio
 
 from lsst.ts import utils
+from lsst.ts.idl.enums.ATWhiteLight import LampControllerError
+
 from .labjack_interface import LabJackInterface
 from .lamp_base import (
-    SHUTTER_ENABLE,
-    SHUTTER_DISABLE,
-    SHUTTER_OPEN,
     SHUTTER_CLOSE,
-    VOLTS_AT_MIN_POWER,
+    SHUTTER_DISABLE,
+    SHUTTER_ENABLE,
+    SHUTTER_OPEN,
     VOLTS_AT_MAX_POWER,
+    VOLTS_AT_MIN_POWER,
 )
-from lsst.ts.idl.enums.ATWhiteLight import LampControllerError
 
 # Time limit for connecting to the LabJack (seconds)
 CONNECT_TIMEOUT = 5

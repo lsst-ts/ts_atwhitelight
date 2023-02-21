@@ -20,13 +20,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
-import unittest
 import math
 import pathlib
-import pytest
+import unittest
 
-from lsst.ts import salobj
-from lsst.ts import atwhitelight
+import pytest
+from lsst.ts import atwhitelight, salobj
+from lsst.ts.atwhitelight.chiller_model import READ_RETURN_TEMPERATURE
 from lsst.ts.idl.enums.ATWhiteLight import (
     ChillerControllerState,
     ErrorCode,
@@ -35,7 +35,6 @@ from lsst.ts.idl.enums.ATWhiteLight import (
     LampControllerState,
     ShutterState,
 )
-from lsst.ts.atwhitelight.chiller_model import READ_RETURN_TEMPERATURE
 
 STD_TIMEOUT = 30  # standard command timeout (sec)
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")

@@ -29,10 +29,10 @@ import functools
 import socket
 import types
 
-from .lamp_base import LabJackChannels
-
 # Hide my error `Module "labjack" has no attribute "ljm"`
 from labjack import ljm  # type: ignore
+
+from .lamp_base import LabJackChannels
 
 # Time limit for connecting to the LabJack (seconds)
 CONNECT_TIMEOUT = 5

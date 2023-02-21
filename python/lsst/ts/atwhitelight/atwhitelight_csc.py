@@ -32,10 +32,11 @@ from lsst.ts.idl.enums.ATWhiteLight import (
     LampControllerError,
     ShutterState,
 )
-from .lamp_model import LampModel
+
+from . import __version__
 from .chiller_model import ChillerModel
 from .config_schema import CONFIG_SCHEMA
-from . import __version__
+from .lamp_model import LampModel
 
 
 class ATWhiteLightCsc(salobj.ConfigurableCsc):

@@ -24,28 +24,27 @@ __all__ = ["LampModel"]
 import asyncio
 import inspect
 
-from .labjack_interface import LabJackInterface
-from .mock_labjack_interface import MockLabJackInterface
-
-from lsst.ts import salobj
-from lsst.ts import utils
+from lsst.ts import salobj, utils
 from lsst.ts.idl.enums.ATWhiteLight import (
     LampBasicState,
-    LampControllerState,
     LampControllerError,
+    LampControllerState,
     ShutterState,
 )
+
+from .labjack_interface import LabJackInterface
 from .lamp_base import (
     ERROR_BLINKING_DURATION,
-    STATUS_INTERVAL,
-    SHUTTER_ENABLE,
-    SHUTTER_DISABLE,
-    SHUTTER_OPEN,
-    SHUTTER_CLOSE,
-    MIN_POWER,
     MAX_POWER,
+    MIN_POWER,
+    SHUTTER_CLOSE,
+    SHUTTER_DISABLE,
+    SHUTTER_ENABLE,
+    SHUTTER_OPEN,
+    STATUS_INTERVAL,
     voltage_from_power,
 )
+from .mock_labjack_interface import MockLabJackInterface
 
 
 def offset_timestamp(timestamp, offset):
