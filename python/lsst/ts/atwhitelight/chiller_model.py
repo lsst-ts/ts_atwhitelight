@@ -26,16 +26,16 @@ import functools
 import inspect
 import math
 
-from lsst.ts import salobj
-from lsst.ts import utils
+from lsst.ts import salobj, utils
 from lsst.ts.idl.enums.ATWhiteLight import ChillerControllerState
-from .chiller_client import ChillerClient
-from .mock_chiller import MockChiller
+
 from .chiller_base import (
     ChillerControlSensor,
     ChillerThresholdType,
     format_chiller_command_value,
 )
+from .chiller_client import ChillerClient
+from .mock_chiller import MockChiller
 
 
 def parse_bool_str(bool_str):
