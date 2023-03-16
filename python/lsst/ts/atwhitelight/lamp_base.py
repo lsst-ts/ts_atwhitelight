@@ -63,6 +63,7 @@ class LabJackChannels:
     """
 
     read = dict(
+        photosensor="AIN0",
         blinking_error="FIO4",
         cooldown="FIO5",
         standby_or_on="FIO6",
