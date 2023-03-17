@@ -50,8 +50,8 @@ from .mock_labjack_interface import MockLabJackInterface
 def offset_timestamp(timestamp, offset):
     """Return timestamp if 0, else timestamp + offset.
 
-    The purpose of this function is to report 0 as 0,
-    instead of some unrealistic tiny value.
+    The purpose of this function is to report timestamp=0 as 0,
+    instead of some unrealistic tiny value (offset).
     """
     if timestamp == 0:
         return 0
@@ -148,6 +148,8 @@ class LampModel:
         # read the controller's blinking error signal.
         self.status_interval = STATUS_INTERVAL
 
+        self.lamp_unexpectedly_off = False
+
         # Was the blinking error signal on last time status was read?
         self.blinking_error_was_on = False
         # Time at which the blinking error signal
@@ -191,6 +193,7 @@ class LampModel:
         return self.topics.evt_lampState.data
 
     async def connect(self):
+        self.lamp_unexpectedly_off = False
         await asyncio.wait_for(
             self.basic_connect(), timeout=self.config.connect_timeout
         )
@@ -215,6 +218,7 @@ class LampModel:
         await self.set_status(
             controller_state=LampControllerState.UNKNOWN,
             controller_error=LampControllerError.UNKNOWN,
+            light_detected=False,  # Assume lamp went off instantly.
         )
 
     async def status_loop(self):
@@ -322,9 +326,11 @@ class LampModel:
                     (False, True): ShutterState.OPEN,
                     (True, True): ShutterState.INVALID,
                 }[(bool(data.shutter_closed), bool(data.shutter_open))]
+                light_detected = data.photosensor > self.config.photo_sensor_on_voltage
                 await self.set_status(
                     controller_state=controller_state,
                     controller_error=controller_error,
+                    light_detected=light_detected,
                 )
                 await self.topics.evt_shutterState.set_write(actualState=shutter_state)
                 if bool(data.shutter_closed):
@@ -340,7 +346,7 @@ class LampModel:
             await self.disconnect()
             raise
 
-    async def set_status(self, controller_state, controller_error):
+    async def set_status(self, controller_state, controller_error, light_detected):
         """Set status and, if changed, call the status callback.
 
         Parameters
@@ -351,34 +357,42 @@ class LampModel:
             Lamp controller state.
         """
         current_tai = utils.current_tai()
-        controller_cooling = controller_state == LampControllerState.COOLDOWN
 
         on_seconds = 0
         if self.topics.evt_lampState.has_data:
             power = self.topics.evt_lampState.data.setPower
             if power > 0:
-                if not self.lamp_on:
+                if not self.lamp_on and not self.lamp_unexpectedly_off:
                     self.lamp_on = True
                     self.lamp_on_time = current_tai
             else:
                 if self.lamp_on:
                     self.lamp_on = False
                     self.lamp_off_time = current_tai
-                    on_seconds = self.lamp_off_time - self.lamp_on_time
-
+                    on_seconds = current_tai - self.lamp_on_time
         if self.lamp_on:
-            if self.get_remaining_warmup() > 0:
+            if not light_detected:
+                if current_tai - self.lamp_on_time > self.config.max_lamp_on_delay:
+                    basic_state = LampBasicState.UNEXPECTEDLY_OFF
+                    self.lamp_unexpectedly_off = True
+                    # Lamp never turned on or unexpectedly turned off;
+                    # either way we don't want a cooldown timer.
+                    self.lamp_on = False
+                    self.lamp_off_time = 0
+                    on_seconds = current_tai - self.lamp_on_time
+                else:
+                    basic_state = LampBasicState.TURNING_ON
+            elif self.get_remaining_warmup() > 0:
                 basic_state = LampBasicState.WARMUP
             else:
                 basic_state = LampBasicState.ON
         else:
-            if self.get_remaining_cooldown() > 0:
-                basic_state = LampBasicState.COOLDOWN
-            elif controller_cooling:
-                self.log.info(
-                    "Setting lampState.basicState=COOLDOWN because "
-                    "lamp controller is in cooldown"
-                )
+            if light_detected:
+                if current_tai - self.lamp_off_time > self.config.max_lamp_off_delay:
+                    basic_state = LampBasicState.UNEXPECTEDLY_ON
+                else:
+                    basic_state = LampBasicState.TURNING_OFF
+            elif self.get_remaining_cooldown() > 0:
                 basic_state = LampBasicState.COOLDOWN
             else:
                 basic_state = LampBasicState.OFF
@@ -395,11 +409,16 @@ class LampModel:
             ),
             force_output=self.force_next_state_output,
         )
+
         self.force_next_state_output = False
 
         result2 = await self.topics.evt_lampConnected.set_write(
             connected=self.labjack.connected
         )
+
+        # Turn off the lamp controller if the bulb is unexpectedly off.
+        if self.lamp_unexpectedly_off:
+            await self._basic_set_power(0)
 
         if on_seconds > 0:
             await self.topics.evt_lampOnHours.set_write(hours=on_seconds / 3600)
@@ -410,11 +429,17 @@ class LampModel:
     def get_remaining_cooldown(self, tai=None):
         """Return the remaining cooldown duration (seconds), or 0 if none.
 
+        Return 0 if the lamp is unexpectedly off. That means the lamp never
+        turned on, or burned out, and either way, there is no point to
+        a cooldown period.
+
         Parameters
         ----------
         tai : `float` or `None`, optional
             TAI time (unix seconds).
         """
+        if self.lamp_off_time == 0:
+            return 0
         if tai is None:
             tai = utils.current_tai()
         off_duration = tai - self.lamp_off_time
@@ -428,6 +453,8 @@ class LampModel:
         tai : `float` or `None`, optional
             TAI time (unix seconds).
         """
+        if self.lamp_on_time == 0:
+            return 0
         if tai is None:
             tai = utils.current_tai()
         on_duration = tai - self.lamp_on_time
@@ -553,6 +580,7 @@ class LampModel:
                     f"wait {remaining_warmup_duration:0.1f} seconds or use force=True."
                 )
 
+        self.lamp_unexpectedly_off = False
         await self._basic_set_power(0)
 
     async def _basic_set_power(self, power):
