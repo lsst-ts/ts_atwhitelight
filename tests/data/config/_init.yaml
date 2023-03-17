@@ -24,6 +24,7 @@ lamp:
   connect_timeout: 5
   cooldown_period: 10
   warmup_period: 10
+  # Use short delays to make certain unit tests run faster.
   max_lamp_on_delay: 2
   max_lamp_off_delay: 2
   photo_sensor_on_voltage: 0.2

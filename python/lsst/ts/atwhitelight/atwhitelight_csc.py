@@ -19,16 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["ATWhiteLightCsc", "run_atwhitelight"]
+__all__ = ["ATWhiteLightCsc", "ErrorCode", "run_atwhitelight"]
 
 import asyncio
 import copy
+import enum
 import types
 
 from lsst.ts import salobj
 from lsst.ts.idl.enums.ATWhiteLight import (
     ChillerControllerState,
-    ErrorCode,
+    LampBasicState,
     LampControllerError,
     ShutterState,
 )
@@ -37,6 +38,18 @@ from . import __version__
 from .chiller_model import ChillerModel
 from .config_schema import CONFIG_SCHEMA
 from .lamp_model import LampModel
+
+
+class ErrorCode(enum.IntEnum):
+    """CSC fault state error codes."""
+
+    CHILLER_DISCONNECTED = 1
+    LAMP_DISCONNECTED = 2
+    LAMP_ERROR = 3
+    CHILLER_ERROR = 4
+    NOT_CHILLING_WITH_LAMP_ON = 5
+    LAMP_UNEXPECTEDLY_OFF = 6
+    LAMP_UNEXPECTEDLY_ON = 7
 
 
 class ATWhiteLightCsc(salobj.ConfigurableCsc):
@@ -161,12 +174,18 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             self.should_be_connected = True
         elif self.summary_state == salobj.State.FAULT:
             # Turn off the lamp, if connected
-            if self.lamp_connected and self.lamp_model.lamp_on:
-                self.log.warning(
-                    "Going to fault while connected to the lamp controller; "
-                    "forcing the lamp off"
-                )
-                await self.lamp_model.turn_lamp_off(force=True)
+            if self.lamp_connected:
+                if self.lamp_model.lamp_on:
+                    self.log.warning(
+                        "Going to fault while connected to the lamp controller; "
+                        "forcing the lamp off"
+                    )
+                    await self.lamp_model.turn_lamp_off(force=True)
+                else:
+                    self.log.warning(
+                        "Going to fault while connected to the lamp controller; "
+                        "lamp was already commanded off"
+                    )
             else:
                 self.log.warning(
                     "Going to fault and not connect to the lamp controller; "
@@ -450,6 +469,18 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             return await self.fault(
                 code=ErrorCode.LAMP_ERROR,
                 report="Lamp controller is reporting an error",
+            )
+
+        # Fault if the lamp is unexpectedly on or off
+        if lamp_state.basicState == LampBasicState.UNEXPECTEDLY_ON:
+            return await self.fault(
+                code=ErrorCode.LAMP_UNEXPECTEDLY_ON,
+                report="Lamp is on when it should be off. The lamp controller may be stuck on.",
+            )
+        elif lamp_state.basicState == LampBasicState.UNEXPECTEDLY_OFF:
+            return await self.fault(
+                code=ErrorCode.LAMP_UNEXPECTEDLY_OFF,
+                report="Lamp is off when it should be on. Check the lamp and lamp controller.",
             )
 
         chiller_watchdog = self.chiller_model.get_watchdog()
