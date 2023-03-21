@@ -655,8 +655,8 @@ class ChillerModel:
             # Get detailed alarm information
             self.seen_alarms = set()
             await self.do_read_l1_alarms()
-            await self.do_read_l2_alarms(sublevel=1),
-            await self.do_read_l2_alarms(sublevel=2),
+            await self.do_read_l2_alarms(sublevel=1)
+            await self.do_read_l2_alarms(sublevel=2)
         else:
             await self.topics.evt_chillerAlarms.set_write(
                 level1=0, level21=0, level22=0
