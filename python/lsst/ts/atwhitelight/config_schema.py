@@ -28,7 +28,7 @@ CONFIG_SCHEMA = yaml.safe_load(
 $schema: http://json-schema.org/draft-07/schema#
 $id: https://github.com/lsst-ts/ts_atwhitelight/blob/develop/python/lsst/ts/atwhitelight/config_schema.py
 # title must end with one or more spaces followed by the schema version, which must begin with "v"
-title: Whitelight v2
+title: Whitelight v3
 description: Schema for AT White Light configuration files
 type: object
 properties:
@@ -195,6 +195,31 @@ properties:
           The lamp controller documentation recommendeds 900 seconds, to preserve bulb life.
         type: number
         exclusiveMinimum: 0
+      max_lamp_off_delay:
+        description: >-
+          How long after the lamp is turned off before going to fault, if the
+          photo sensor still reports significant light (seconds).
+          The signal should drop in about 2 seconds, but some margin helps avoid
+          unnecessary faults, so we recommend 4 seconds.
+        type: number
+        exclusiveMinimum: 0
+      max_lamp_on_delay:
+        description: >-
+          How long after the lamp is turned on before going to fault, if the
+          photo sensor does not detect significant light (seconds).
+          The lamp controller may take up to 20 seconds to ignite the bulb,
+          and once ignited the photo sensor detects usable light in less than
+          a second. So we recommend 25 seconds, to avoid false alarms.
+        type: number
+        exclusiveMinimum: 0
+      photo_sensor_on_voltage:
+        description: >-
+          Voltage above which the lamp is considered on.
+          Note: the range of voltage between lamp on and off
+          should be large enough to not need hysteresis.
+          As of 2023-03 we recommend 0.2V.
+        type: number
+        exclusiveMinimum: 0
       shutter_timeout:
         description: Maximum time for a shutter move before giving up (seconds). Be generous.
         type: number
@@ -203,10 +228,13 @@ properties:
       - device_type
       - connection_type
       - identifier
+      - default_power
       - connect_timeout
       - cooldown_period
       - warmup_period
-      - default_power
+      - max_lamp_on_delay
+      - max_lamp_off_delay
+      - photo_sensor_on_voltage
       - shutter_timeout
     additionalProperties: false
 required:

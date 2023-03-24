@@ -6,6 +6,22 @@
 Version History
 ###############
 
+v0.2.5
+------
+
+* Support the new photo sensor.
+  This requires ts_idl 4.4 and ts_config_atcalsys 0.7.
+* ``Jenkinsfile``: fix module name.
+* Remove scons support.
+
+Requires:
+
+* ts_idl 4.4
+* ts_salobj 7.1
+* ts_tcpip
+* ts_utils
+* IDL file for ATWhiteLight built from ts_xml 11.1
+
 v0.2.4
 ------
 

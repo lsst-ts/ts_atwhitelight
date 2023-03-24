@@ -23,7 +23,7 @@ pipeline {
     }
     environment {
         // Python module name.
-        MODULE_NAME = 'lsst.ts.whitelight'
+        MODULE_NAME = 'lsst.ts.atwhitelight'
         // Space-separated list of SAL component names for all IDL files required.
         IDL_NAMES = 'ATWhiteLight'
         // Product name for documentation upload; the associated

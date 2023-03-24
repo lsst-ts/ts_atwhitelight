@@ -46,9 +46,25 @@ READ_WRITE_TIMEOUT = 5
 MOCK_IDENTIFIER = "LJM_DEMO_MODE"
 
 # Duration of lamp controller's cooldown timer (seconds).
-# This should be shorter than the CSC's config.lamp.cooldown_duration
+# This should be shorter than the CSC's config.lamp.cooldown_interval
 # in order to be realistic.
 COOLDOWN_DURATION = 4
+
+
+# Delay (sec) after turning off the lamp before the mock phototransistor
+# reports that the lamp is off. This represents the time it takes
+# for the lamp to stop emitting significant light after power is removed.
+LAMP_OFF_DELAY = 0.5
+# Delay (sec) after turning on the lamp before the mock phototransistor
+# reports that the lamp is on. This represents the time it takes
+# for the lamp to start emitting significant light after power is applied.
+LAMP_ON_DELAY = 0.2
+# Voltage from mock phototransistor when the lamp is off.
+# Must be less than the LampModel's config.photo_sensor_on_voltage.
+LAMP_OFF_VOLTAGE = 0.05
+# Voltage from mock phototransistor when the lamp is on.
+# Must be more than the LampModel's config.photo_sensor_on_voltage.
+LAMP_ON_VOLTAGE = 0.8
 
 
 class MockLabJackInterface(LabJackInterface):
@@ -104,11 +120,23 @@ class MockLabJackInterface(LabJackInterface):
         self.shutter_closed_switch = True
         self.shutter_enabled = False
         self.blinking_error = False
+        self.photosensor = LAMP_OFF_VOLTAGE
+
+        # Unit tests can set the following flags false to simulate
+        # the photosensor not going on (e.g. burned out bulb)
+        # or off (e.g. lamp controller stuck on).
+        self.allow_photosensor_on = True
+        self.allow_photosensor_off = True
+
+        # Most recent time (TAI unix sec) at which the lamp was
+        # turned off or on.
         self.lamp_off_time = 0
+        self.lamp_on_time = 0
 
         self.blinking_error_task = utils.make_done_future()
         self.move_shutter_task = utils.make_done_future()
         self.controller_error = LampControllerError.NONE
+
         super().__init__(
             identifier=identifier,
             log=log,
@@ -120,16 +148,22 @@ class MockLabJackInterface(LabJackInterface):
     async def read(self):
         data = await super().read()
 
-        for name in ("standby_or_on", "cooldown"):
-            setattr(data, name, False)
+        data.standby_or_on = False
+        data.cooldown = False
         if self.set_power == 0:
             off_duration = utils.current_tai() - self.lamp_off_time
             if off_duration > self.cooldown_duration:
                 data.standby_or_on = True
             else:
                 data.cooldown = True
+            if off_duration > LAMP_OFF_DELAY and self.allow_photosensor_off:
+                self.photosensor = LAMP_OFF_VOLTAGE
         else:
             data.standby_or_on = True
+            on_duration = utils.current_tai() - self.lamp_on_time
+            if on_duration > LAMP_ON_DELAY and self.allow_photosensor_on:
+                self.photosensor = LAMP_ON_VOLTAGE
+        data.photosensor = self.photosensor
         data.error_exists = int(self.controller_error != LampControllerError.NONE)
         data.blinking_error = self.blinking_error
         data.shutter_open = self.shutter_open_switch
@@ -146,11 +180,14 @@ class MockLabJackInterface(LabJackInterface):
             if set_power == 0:
                 if self.set_power > 0:
                     self.lamp_off_time = utils.current_tai()
-            elif set_power < VOLTS_AT_MIN_POWER or set_power > VOLTS_AT_MAX_POWER:
-                raise RuntimeError(
-                    f"Invalid set_power={set_power} must be 0 or in range "
-                    f"[{VOLTS_AT_MIN_POWER}, {VOLTS_AT_MAX_POWER}] V"
-                )
+            else:
+                if set_power < VOLTS_AT_MIN_POWER or set_power > VOLTS_AT_MAX_POWER:
+                    raise RuntimeError(
+                        f"Invalid set_power={set_power} must be 0 or in range "
+                        f"[{VOLTS_AT_MIN_POWER}, {VOLTS_AT_MAX_POWER}] V"
+                    )
+                if self.set_power == 0:
+                    self.lamp_on_time = utils.current_tai()
             self.set_power = set_power
 
         shutter_direction = kwargs.get("shutter_direction")
