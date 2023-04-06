@@ -77,6 +77,10 @@ class LampModel:
         It receives one argument: this model.
     simulate : `bool`, optional
         Run in simulation mode?
+    make_connect_time_out : `bool`, optional
+        Make the connect method timeout?
+        Only useful for unit tests.
+        Ignored if simulate false.
 
     Raises
     ------
@@ -95,7 +99,15 @@ class LampModel:
         Time at which the lamp was last turned on (TAI unix seconds)
     """
 
-    def __init__(self, config, topics, log, status_callback=None, simulate=False):
+    def __init__(
+        self,
+        config,
+        topics,
+        log,
+        status_callback=None,
+        simulate=False,
+        make_connect_time_out=False,
+    ):
         if status_callback is not None and not inspect.iscoroutinefunction(
             status_callback
         ):
@@ -111,7 +123,7 @@ class LampModel:
         self.config = config
         self.topics = topics
         self.log = log.getChild("LampModel")
-        self.simulate = simulate
+        self.make_connect_time_out = make_connect_time_out
         self.status_callback = status_callback
 
         # Set True if you call evt_lampState.set and it changes something
@@ -132,7 +144,6 @@ class LampModel:
             connection_type=self.config.connection_type,
             simulate=simulate,
         )
-        self.simulate = False
         self.status_task = utils.make_done_future()
         self.lamp_on = False
         self.lamp_off_time = 0
@@ -149,6 +160,7 @@ class LampModel:
         self.status_interval = STATUS_INTERVAL
 
         self.lamp_unexpectedly_off = False
+        self.lamp_unexpectedly_on = False
 
         # Was the blinking error signal on last time status was read?
         self.blinking_error_was_on = False
@@ -174,6 +186,11 @@ class LampModel:
         return self.labjack.connected
 
     @property
+    def simulate(self):
+        """Return the simulate constructor argument."""
+        return self.labjack.simulate
+
+    @property
     def status_seen(self):
         """Return True if connected and status has been seen."""
         return self.connected and self.status_event.is_set()
@@ -193,10 +210,21 @@ class LampModel:
         return self.topics.evt_lampState.data
 
     async def connect(self):
-        self.lamp_unexpectedly_off = False
-        await asyncio.wait_for(
-            self.basic_connect(), timeout=self.config.connect_timeout
-        )
+        try:
+            await self.basic_disconnect(cancel_status_loop=False)
+            self.lamp_unexpectedly_off = False
+            self.lamp_unexpectedly_on = False
+            if self.simulate and self.make_connect_time_out:
+                raise asyncio.TimeoutError(
+                    "LampModel.connect timing out because make_connect_time_out is true"
+                )
+            await asyncio.wait_for(
+                self.basic_connect(), timeout=self.config.connect_timeout
+            )
+        except Exception as e:
+            self.log.exception(f"LampModel.connect failed: {e!r}")
+            await self.call_status_callback()
+            raise
 
     async def basic_connect(self):
         self.status_event.clear()
@@ -204,16 +232,26 @@ class LampModel:
         self.status_task = asyncio.create_task(self.status_loop())
         await self.status_event.wait()
 
-    async def disconnect(self):
-        self.force_next_state_output = False
-        await asyncio.wait_for(
-            self.basic_disconnect(), timeout=self.config.connect_timeout
-        )
+    async def disconnect(self, cancel_status_loop=True):
+        try:
+            self.force_next_state_output = False
+            was_connected = self.connected
+            await asyncio.wait_for(
+                self.basic_disconnect(cancel_status_loop=cancel_status_loop),
+                timeout=self.config.connect_timeout,
+            )
+            if was_connected:
+                await self.call_status_callback()
+        except Exception as e:
+            self.log.exception(f"LampModel.disconnect failed: {e!r}")
+            await self.call_status_callback()
+            raise
 
-    async def basic_disconnect(self):
+    async def basic_disconnect(self, cancel_status_loop):
         await self.turn_lamp_off(force=True)
-        self.status_task.cancel()
-        self.status_event.clear()
+        if cancel_status_loop:
+            self.status_task.cancel()
+            self.status_event.clear()
         await self.labjack.disconnect()
         await self.set_status(
             controller_state=LampControllerState.UNKNOWN,
@@ -341,9 +379,9 @@ class LampModel:
                 await asyncio.sleep(self.status_interval)
         except asyncio.CancelledError:
             self.log.debug("Status loop ends")
-        except Exception:
-            self.log.exception("Status loop failed")
-            await self.disconnect()
+        except Exception as e:
+            self.log.exception(f"Status loop failed; disconnecting: {e!r}")
+            await self.disconnect(cancel_status_loop=False)
             raise
 
     async def set_status(self, controller_state, controller_error, light_detected):
@@ -353,49 +391,70 @@ class LampModel:
         ----------
         controller_error : `LampControllerError`
             Error reported by the lamp controller.
+            Ignored if not connected.
         controller_state : `LampControllerState`
             Lamp controller state.
+            Ignored if not connected.
         """
         current_tai = utils.current_tai()
 
         on_seconds = 0
-        if self.topics.evt_lampState.has_data:
-            power = self.topics.evt_lampState.data.setPower
-            if power > 0:
-                if not self.lamp_on and not self.lamp_unexpectedly_off:
-                    self.lamp_on = True
-                    self.lamp_on_time = current_tai
-            else:
-                if self.lamp_on:
-                    self.lamp_on = False
-                    self.lamp_off_time = current_tai
-                    on_seconds = current_tai - self.lamp_on_time
-        if self.lamp_on:
-            if not light_detected:
-                if current_tai - self.lamp_on_time > self.config.max_lamp_on_delay:
-                    basic_state = LampBasicState.UNEXPECTEDLY_OFF
-                    self.lamp_unexpectedly_off = True
-                    # Lamp never turned on or unexpectedly turned off;
-                    # either way we don't want a cooldown timer.
-                    self.lamp_on = False
-                    self.lamp_off_time = 0
-                    on_seconds = current_tai - self.lamp_on_time
-                else:
-                    basic_state = LampBasicState.TURNING_ON
-            elif self.get_remaining_warmup() > 0:
-                basic_state = LampBasicState.WARMUP
-            else:
-                basic_state = LampBasicState.ON
-        else:
-            if light_detected:
-                if current_tai - self.lamp_off_time > self.config.max_lamp_off_delay:
-                    basic_state = LampBasicState.UNEXPECTEDLY_ON
-                else:
-                    basic_state = LampBasicState.TURNING_OFF
-            elif self.get_remaining_cooldown() > 0:
+        if not self.connected:
+            controller_error = LampControllerError.UNKNOWN
+            controller_state = LampControllerState.UNKNOWN
+            if self.get_remaining_cooldown() > 0:
                 basic_state = LampBasicState.COOLDOWN
             else:
-                basic_state = LampBasicState.OFF
+                basic_state = LampBasicState.UNKNOWN
+        else:
+            if self.topics.evt_lampState.has_data:
+                power = self.topics.evt_lampState.data.setPower
+                if power > 0:
+                    if not self.lamp_on and not self.lamp_unexpectedly_off:
+                        self.lamp_on = True
+                        self.lamp_on_time = current_tai
+                else:
+                    if self.lamp_on and not self.lamp_unexpectedly_on:
+                        self.lamp_on = False
+                        self.lamp_off_time = current_tai
+                        on_seconds = current_tai - self.lamp_on_time
+            if self.lamp_on:
+                if not light_detected:
+                    if current_tai - self.lamp_on_time > self.config.max_lamp_on_delay:
+                        # The lamp never turned on or unexpectedly turned off;
+                        # either way we don't want a cooldown timer.
+                        basic_state = LampBasicState.UNEXPECTEDLY_OFF
+                        self.lamp_unexpectedly_off = True
+                        self.lamp_on = False
+                        self.lamp_off_time = 0
+                        on_seconds = current_tai - self.lamp_on_time
+                    else:
+                        # Still waiting for the photo sensor
+                        # to show a signal.
+                        basic_state = LampBasicState.TURNING_ON
+                elif self.get_remaining_warmup() > 0:
+                    basic_state = LampBasicState.WARMUP
+                else:
+                    basic_state = LampBasicState.ON
+            else:
+                if light_detected:
+                    if (
+                        current_tai - self.lamp_off_time
+                        > self.config.max_lamp_off_delay
+                    ):
+                        # The lamp never turned off; we don't want a cooldown
+                        # timer.
+                        basic_state = LampBasicState.UNEXPECTEDLY_ON
+                        self.lamp_unexpectedly_on = True
+                        self.lamp_off_time = 0
+                    else:
+                        # Still waiting for the photo sensor
+                        # to stop showing a signal.
+                        basic_state = LampBasicState.TURNING_OFF
+                elif self.get_remaining_cooldown() > 0:
+                    basic_state = LampBasicState.COOLDOWN
+                else:
+                    basic_state = LampBasicState.OFF
 
         result1 = await self.topics.evt_lampState.set_write(
             basicState=basic_state,
@@ -547,6 +606,7 @@ class LampModel:
                 f"Cooling; wait {remaining_cooldown:0.1f} seconds."
             )
 
+        self.lamp_unexpectedly_on = False
         await self._basic_set_power(power)
 
     async def turn_lamp_off(self, force=False):
