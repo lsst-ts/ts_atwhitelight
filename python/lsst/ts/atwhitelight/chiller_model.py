@@ -80,10 +80,10 @@ class ChillerModel:
         The CSC or a struct with chiller-specific write topics.
     log : `logging.Logger`
         Logger.
-    status_callback : `awaitable` or `None`, optional
+    status_callback : `awaitable` or `None`
         Coroutine to call when evt_chillerWatchdog or evt_chillerConnected
         changes. It receives one argument: this model.
-    simulate : `bool`, optional
+    simulate : `bool`
         Run in simulation mode?
         If true then run a mock chiller.
 
@@ -207,46 +207,57 @@ class ChillerModel:
         Start background tasks that keep the model up-to-date.
         """
         await self.disconnect()
-        if self.simulate:
-            if self.mock_chiller is None:
-                self.mock_chiller = MockChiller(log=self.log)
-                await self.mock_chiller.start_task
-            host = self.mock_chiller.host
-            port = self.mock_chiller.port
-        else:
-            host = self.config.host
-            port = self.config.port
+        try:
+            if self.simulate:
+                if self.mock_chiller is None:
+                    self.mock_chiller = MockChiller(log=self.log)
+                    await self.mock_chiller.start_task
+                host = self.mock_chiller.host
+                port = self.mock_chiller.port
+            else:
+                host = self.config.host
+                port = self.config.port
 
-        self.log.debug("Create ChillerClient with host=%s, port=%s", host, port)
-        self.client = ChillerClient(
-            device_id=self.device_id,
-            host=host,
-            port=port,
-            log=self.log,
-            connect_timeout=self.config.connect_timeout,
-            command_timeout=self.config.command_timeout,
-        )
-        await self.client.connect()
-        await self.topics.evt_chillerConnected.set_write(connected=True)
-        self.log.debug("Connected; configure chiller")
-        await self.configure_chiller()
-        await self.do_watchdog()
-        self.watchdog_task = asyncio.create_task(self.watchdog_loop())
-        self.telemetry_task = asyncio.create_task(self.telemetry_loop())
-        self.configured_event.set()
-        self.log.debug("Connected and configured")
+            self.log.debug("Create ChillerClient with host=%s, port=%s", host, port)
+            self.client = ChillerClient(
+                device_id=self.device_id,
+                host=host,
+                port=port,
+                log=self.log,
+            )
+            await asyncio.wait_for(
+                self.client.start_task, timeout=self.config.connect_timeout
+            )
+            await self.topics.evt_chillerConnected.set_write(connected=True)
+            self.log.debug("Connected; configure chiller")
+            await self.configure_chiller()
+            await self.do_watchdog()
+            self.watchdog_task = asyncio.create_task(self.watchdog_loop())
+            self.telemetry_task = asyncio.create_task(self.telemetry_loop())
+            self.configured_event.set()
+            self.log.debug("Connected and configured")
+        except Exception as e:
+            self.log.exception(f"ChillerModel.connect failed: {e!r}")
+            await self.call_status_callback()
+            raise
 
     async def disconnect(self):
         """Disconnect from the chiller and cancel tasks."""
-        self.configured_event.clear()
-        result = await self.topics.evt_chillerConnected.set_write(connected=False)
-        self.watchdog_task.cancel()
-        self.telemetry_task.cancel()
-        self.reset_seen()
-        if self.client is not None:
-            await self.client.disconnect()
-        if result.did_change:
+        try:
+            was_connected = self.connected
+            self.configured_event.clear()
+            await self.topics.evt_chillerConnected.set_write(connected=False)
+            self.watchdog_task.cancel()
+            self.telemetry_task.cancel()
+            self.reset_seen()
+            if self.client is not None:
+                await self.client.close()
+            if was_connected:
+                await self.call_status_callback()
+        except Exception as e:
+            self.log.exception(f"ChillerModel.disconnect failed: {e!r}")
             await self.call_status_callback()
+            raise
 
     async def call_status_callback(self):
         """Call the status callback, if there is one."""
@@ -774,7 +785,9 @@ class ChillerModel:
         if not self.connected:
             raise ConnectedError("Not connected")
 
-        reply = await self.client.run_command(cmd)
+        reply = await asyncio.wait_for(
+            self.client.run_command(cmd), timeout=self.config.command_timeout
+        )
 
         if len(reply) < 14:
             err_msg = f"Command {cmd} failed: reply={reply!r}"
