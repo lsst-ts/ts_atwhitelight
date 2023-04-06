@@ -26,7 +26,7 @@ import asyncio
 from lsst.ts import tcpip
 
 
-class ChillerClient:
+class ChillerClient(tcpip.Client):
     """TCP/IP client for the chiller.
 
     Parameters
@@ -39,10 +39,6 @@ class ChillerClient:
         TCP/IP port number of the chiller.
     log : `logging.Logger`
         Logger.
-    connect_timeout : `float`, optional
-        Connection timeout (seconds).
-    command_timeout : `float`, optional
-        Command timeout (seconds)
 
     Attributes
     ----------
@@ -52,45 +48,10 @@ class ChillerClient:
         Stream writer. If None then not connected.
     """
 
-    def __init__(
-        self, device_id, host, port, log, connect_timeout=10, command_timeout=5
-    ):
+    def __init__(self, device_id, host, port, log):
         self.device_id = device_id
-        self.host = host
-        self.port = port
-        self.log = log
-        self.command_timeout = command_timeout
-        self.connect_timeout = connect_timeout
-
-        self.reader = None
-        self.writer = None
         self.communication_lock = asyncio.Lock()
-
-    @property
-    def connected(self):
-        return not (
-            self.writer is None
-            or self.reader is None
-            or self.writer.is_closing()
-            or self.reader.at_eof()
-        )
-
-    async def connect(self):
-        """Connect to chiller's ethernet-to-serial bridge"""
-        self.log.debug(f"connecting to: {self.host}:{self.port}.")
-        if self.connected:
-            raise RuntimeError("Already connected")
-        self.log.debug(f"Connecting to chiller @ {self.host}")
-        self.reader, self.writer = await asyncio.wait_for(
-            asyncio.open_connection(self.host, self.port), timeout=self.connect_timeout
-        )
-
-    async def disconnect(self):
-        if self.writer is not None:
-            await tcpip.close_stream_writer(self.writer)
-
-        self.reader = None
-        self.writer = None
+        super().__init__(host=host, port=port, log=log, name="ChillerClient")
 
     async def run_command(self, cmd):
         """Send a command and wait for the reply.
@@ -112,11 +73,8 @@ class ChillerClient:
 
         async with self.communication_lock:
             self.log.debug(f"Run chiller command {full_cmd}")
-            self.writer.write(full_cmd)
-            await self.writer.drain()
-            reply = await asyncio.wait_for(
-                self.reader.readuntil(separator=b"\r"), timeout=self.command_timeout
-            )
+            await self.write(full_cmd)
+            reply = await self.readuntil(separator=b"\r")
         self.log.debug(f"Read chiller reply {reply}")
         return reply.decode()[:-3]
 
