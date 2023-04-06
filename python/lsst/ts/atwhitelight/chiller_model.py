@@ -86,6 +86,10 @@ class ChillerModel:
     simulate : `bool`
         Run in simulation mode?
         If true then run a mock chiller.
+    make_connect_time_out : `bool`, optional
+        Make the connect method timeout?
+        Only useful for unit tests.
+        Ignored if simulate false.
 
     Raises
     ------
@@ -99,7 +103,15 @@ class ChillerModel:
     In addition, the value read by the return sensor is not believable.
     """
 
-    def __init__(self, config, topics, log, status_callback, simulate):
+    def __init__(
+        self,
+        config,
+        topics,
+        log,
+        status_callback,
+        simulate,
+        make_connect_time_out=False,
+    ):
         if status_callback is not None and not inspect.iscoroutinefunction(
             status_callback
         ):
@@ -112,6 +124,7 @@ class ChillerModel:
         self.log = log.getChild("ChillerModel")
         self.status_callback = status_callback
         self.simulate = simulate
+        self.make_connect_time_out = make_connect_time_out
 
         self.device_id = "01"
         self.topics.tel_chillerTemperatures.set(
@@ -225,6 +238,10 @@ class ChillerModel:
                 port=port,
                 log=self.log,
             )
+            if self.simulate and self.make_connect_time_out:
+                raise asyncio.TimeoutError(
+                    "ChillerModel.connect timing out because make_connect_time_out is true"
+                )
             await asyncio.wait_for(
                 self.client.start_task, timeout=self.config.connect_timeout
             )
