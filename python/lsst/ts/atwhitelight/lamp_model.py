@@ -42,9 +42,22 @@ from .lamp_base import (
     SHUTTER_ENABLE,
     SHUTTER_OPEN,
     STATUS_INTERVAL,
+    VOLTS_AT_MIN_POWER,
+    power_from_voltage,
     voltage_from_power,
 )
 from .mock_labjack_interface import MockLabJackInterface
+
+# How long (sec) after writing new power to the LabJack before reading it.
+READ_POWER_DELAY = 0.1
+
+# What set lamp voltage indicates that the lamp is commanded to be on?
+# This should be a bit less than the actual min voltage, to allow for
+# quantization error and electrical noise (if reading a sense line instead
+# of the output DAC register). Note that the set voltage should
+# either be 0 or >= VOLTS_AT_MIN_POWER, so there should never be any doubt
+# as to whether the lamp has been commanded on.
+LAMP_SET_VOLTAGE_ON_THRESHOLD = VOLTS_AT_MIN_POWER - 0.1
 
 
 def offset_timestamp(timestamp, offset):
@@ -93,6 +106,8 @@ class LampModel:
     ----------
     default_power : `float`
         Default power after the lamp is started (Watts) in range 800-1200.
+    lamp_was_on : `bool`
+        Was the lamp commanded on, as of the most recently read LabJack data?
     """
 
     def __init__(
@@ -122,9 +137,6 @@ class LampModel:
         self.make_connect_time_out = make_connect_time_out
         self.status_callback = status_callback
 
-        # Set True if you call evt_lampState.set and it changes something
-        self.force_next_state_output = False
-
         # Set if connected to the labjack and state data seen,
         # cleared otherwise.
         self.status_event = asyncio.Event()
@@ -141,7 +153,7 @@ class LampModel:
             simulate=simulate,
         )
         self.status_task = utils.make_done_future()
-        self.lamp_on = False
+        self.lamp_was_on = None
         # Set this true any time the blinking error signal is off
         # for at least ERROR_BLINKING_DURATION seconds.
         # This helps decode error signals.
@@ -152,6 +164,10 @@ class LampModel:
         # This must be less than 0.25 in order to reliably
         # read the controller's blinking error signal.
         self.status_interval = STATUS_INTERVAL
+
+        # Lock for READ_POWER_DELAY when writing new power to the LabJack
+        # and lock before reading power, so the read power will match.
+        self.change_power_lock = asyncio.Lock()
 
         self.lamp_unexpectedly_off = False
         self.lamp_unexpectedly_on = False
@@ -246,7 +262,6 @@ class LampModel:
 
     async def disconnect(self, cancel_status_loop=True):
         try:
-            self.force_next_state_output = False
             was_connected = self.connected
             await asyncio.wait_for(
                 self.basic_disconnect(cancel_status_loop=cancel_status_loop),
@@ -260,7 +275,8 @@ class LampModel:
             raise
 
     async def basic_disconnect(self, cancel_status_loop):
-        await self.turn_lamp_off(force=True)
+        if self.connected:
+            await self.turn_lamp_off(force=True)
         if cancel_status_loop:
             self.status_task.cancel()
             self.status_event.clear()
@@ -268,7 +284,8 @@ class LampModel:
         await self.set_status(
             controller_state=LampControllerState.UNKNOWN,
             controller_error=LampControllerError.UNKNOWN,
-            light_detected=False,  # Assume lamp went off instantly.
+            light_detected=False,  # Ignored
+            read_lamp_set_voltage=0,  # Ignored
         )
 
     async def status_loop(self):
@@ -280,8 +297,12 @@ class LampModel:
         """
         try:
             while True:
-                data = await self.labjack.read()
+                async with self.change_power_lock:
+                    data = await self.labjack.read()
                 current_tai = utils.current_tai()
+                lamp_commanded_on = (
+                    data.read_lamp_set_voltage > LAMP_SET_VOLTAGE_ON_THRESHOLD
+                )
 
                 if data.error_exists:
                     # Try to decode the blinking error
@@ -364,11 +385,18 @@ class LampModel:
                 if data.error_exists:
                     controller_state = LampControllerState.ERROR
                 elif data.standby_or_on:
-                    controller_state = LampControllerState.STANDBY_OR_ON
+                    if lamp_commanded_on:
+                        controller_state = LampControllerState.ON
+                    else:
+                        controller_state = LampControllerState.STANDBY
                 elif data.cooldown:
                     controller_state = LampControllerState.COOLDOWN
                 else:
-                    controller_state = LampControllerState.OFF
+                    # Apparently none of the status LEDs is on.
+                    # Likely the lamp controller is powered off,
+                    # or a connection between the lamp controller
+                    # and the LabJack is broken.
+                    controller_state = LampControllerState.UNKNOWN
 
                 shutter_state = {
                     (False, False): ShutterState.UNKNOWN,
@@ -381,6 +409,7 @@ class LampModel:
                     controller_state=controller_state,
                     controller_error=controller_error,
                     light_detected=light_detected,
+                    read_lamp_set_voltage=data.read_lamp_set_voltage,
                 )
                 await self.topics.evt_shutterState.set_write(actualState=shutter_state)
                 if bool(data.shutter_closed):
@@ -396,7 +425,13 @@ class LampModel:
             await self.disconnect(cancel_status_loop=False)
             raise
 
-    async def set_status(self, controller_state, controller_error, light_detected):
+    async def set_status(
+        self,
+        controller_state,
+        controller_error,
+        light_detected,
+        read_lamp_set_voltage,
+    ):
         """Set status and, if changed, call the status callback.
 
         Parameters
@@ -407,8 +442,17 @@ class LampModel:
         controller_state : `LampControllerState`
             Lamp controller state.
             Ignored if not connected.
+        light_detected : `bool`
+            Did the photo sensor detect light?
+            Ignored if not connected.
+        lamp_commanded_on : `bool`
+            Is the lamp commanded to be on? This should be based on
+            ``read_lamp_set_voltage`` from the LabJack.
+             Ignored if not connected.
         """
         current_tai = utils.current_tai()
+        lamp_commanded_on = read_lamp_set_voltage > LAMP_SET_VOLTAGE_ON_THRESHOLD
+        lamp_set_power = power_from_voltage(read_lamp_set_voltage)
 
         on_seconds = 0
         if not self.connected:
@@ -419,25 +463,42 @@ class LampModel:
             else:
                 basic_state = LampBasicState.UNKNOWN
         else:
-            if self.topics.evt_lampState.has_data:
-                power = self.topics.evt_lampState.data.setPower
-                if power > 0:
-                    if not self.lamp_on and not self.lamp_unexpectedly_off:
-                        self.lamp_on = True
-                        self.lamp_on_time = current_tai
-                else:
-                    if self.lamp_on and not self.lamp_unexpectedly_on:
-                        self.lamp_on = False
-                        self.lamp_off_time = current_tai
-                        on_seconds = current_tai - self.lamp_on_time
-            if self.lamp_on:
+            if self.lamp_was_on is None:
+                # This is the first time set_status has been called
+                # since the model was constructed.
+                # If the appropriate lamp on/off time is 0 (never been set),
+                # set it so that the lamp is fully warmed up or cooled down,
+                # so we can immediately transition it.
+                # Otherwise assume the old time is correct,
+                # (even though the lamp may have been turned on or off
+                # since we were last connected).
+                # Note: if light_detected != lamp_commanded_on
+                # then this will cause an immediate fault. That seems
+                # reasonable, given the short window for this to occur,
+                # and the annoyance of waiting to turn the lamp on or off.
+                self.lamp_was_on = lamp_commanded_on
+                if lamp_commanded_on:
+                    if self.lamp_on_time == 0:
+                        # Prevent unrealistic values of on_seconds
+                        self.lamp_on_time = current_tai - self.config.warmup_period
+            elif lamp_commanded_on:
+                if not self.lamp_was_on and not self.lamp_unexpectedly_off:
+                    self.lamp_was_on = True
+                    self.lamp_on_time = current_tai
+            else:
+                if self.lamp_was_on and not self.lamp_unexpectedly_on:
+                    self.lamp_was_on = False
+                    self.lamp_off_time = current_tai
+                    on_seconds = current_tai - self.lamp_on_time
+
+            if self.lamp_was_on:
                 if not light_detected:
                     if current_tai - self.lamp_on_time > self.config.max_lamp_on_delay:
                         # The lamp never turned on or unexpectedly turned off;
                         # either way we don't want a cooldown timer.
                         basic_state = LampBasicState.UNEXPECTEDLY_OFF
                         self.lamp_unexpectedly_off = True
-                        self.lamp_on = False
+                        self.lamp_was_on = False
                         self.lamp_off_time = 0
                         on_seconds = current_tai - self.lamp_on_time
                     else:
@@ -478,18 +539,16 @@ class LampModel:
             warmupEndTime=offset_timestamp(
                 self.lamp_on_time, self.config.warmup_period
             ),
-            force_output=self.force_next_state_output,
+            setPower=lamp_set_power,
         )
-
-        self.force_next_state_output = False
 
         result2 = await self.topics.evt_lampConnected.set_write(
             connected=self.labjack.connected
         )
 
         # Turn off the lamp controller if the bulb is unexpectedly off.
-        if self.lamp_unexpectedly_off:
-            await self._basic_set_power(0)
+        if self.lamp_unexpectedly_off and self.connected:
+            await self._set_lamp_power(0)
 
         if on_seconds > 0:
             await self.topics.evt_lampOnHours.set_write(hours=on_seconds / 3600)
@@ -619,7 +678,7 @@ class LampModel:
             )
 
         self.lamp_unexpectedly_on = False
-        await self._basic_set_power(power)
+        await self._set_lamp_power(power)
 
     async def turn_lamp_off(self, force=False):
         """Turn the lamp off (if on). Fail if warming up, unless force=True.
@@ -635,7 +694,7 @@ class LampModel:
         salobj.ExpectedError
             If warming up and force=False.
         """
-        if not self.lamp_on:
+        if not self.lamp_was_on:
             return
 
         on_duration = utils.current_tai() - self.lamp_on_time
@@ -653,13 +712,10 @@ class LampModel:
                 )
 
         self.lamp_unexpectedly_off = False
-        await self._basic_set_power(0)
+        await self._set_lamp_power(0)
 
-    async def _basic_set_power(self, power):
+    async def _set_lamp_power(self, power):
         """Set the desired lamp power.
-
-        This routine does not check that the specified power is in range.
-        That is done in set_power.
 
         Parameters
         ----------
@@ -673,13 +729,9 @@ class LampModel:
             If power is not 0 and is not between 800 and 1200W (inclusive).
         """
         voltage = voltage_from_power(power)
-        await self.labjack.write(set_power=voltage)
-
-        # Rather than calling set_status wait for the next polling
-        # so the data is self-consistent. But do force output
-        # if setPower changed, in case this is the only change.
-        did_change = self.topics.evt_lampState.set(setPower=power)
-        self.force_next_state_output = self.force_next_state_output or did_change
+        async with self.change_power_lock:
+            await self.labjack.write(lamp_set_voltage=voltage)
+            await asyncio.sleep(READ_POWER_DELAY)
 
     async def call_status_callback(self):
         """Call the status callback, if there is one."""
