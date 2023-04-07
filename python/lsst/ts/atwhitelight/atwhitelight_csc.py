@@ -95,7 +95,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
         self.lamp_model = None
         self.chiller_model = None
 
-        # Unit tests can set either or vboth of these true to make
+        # Unit tests can set either or both of these true to make
         # the connect method time out in the appropriate model.
         # Ignored unless in simulation mode.
         self.chiller_make_connect_time_out = False
@@ -104,6 +104,12 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
         # Set True just after the lamp and chiller are both connected,
         # and false just before disconnecting them.
         self.should_be_connected = False
+
+        # Time at which the lamp went on or off (TAI, unix seconds).
+        # Used by the lamp model for cooldown and warmup timers.
+        # Saved here so we can preserve the data when disconnected.
+        self.lamp_on_time = 0
+        self.lamp_off_time = 0
 
         self.config = None
 
@@ -180,12 +186,12 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
                     )
             self.should_be_connected = True
         elif self.summary_state == salobj.State.FAULT:
-            if self.lamp_model and self.lamp_model.lamp_on:
+            if self.lamp_model and self.lamp_model.lamp_was_on:
                 # Turn off the lamp, if connected
                 if self.lamp_connected:
                     self.log.warning(
                         "Going to fault while connected to the lamp controller; "
-                        "trying to turn the lamp off immediately"
+                        "trying to turn the lamp off immediately."
                     )
                     try:
                         await self.lamp_model.turn_lamp_off(force=True)
@@ -200,13 +206,13 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
                     )
         else:
             self.should_be_connected = False
-            if self.lamp_connected and self.lamp_model.lamp_on:
+            if self.lamp_connected and self.lamp_model.lamp_was_on:
                 try:
                     await self.lamp_model.turn_lamp_off(force=True)
                 except Exception as e:
                     self.log.warning(
                         f"Going to state {self.summary_state!r} but failed to turn off lamp: {e!r}; "
-                        "please turn it off manually"
+                        "please turn it off manually."
                     )
             await self.disconnect_lamp()
             await self.disconnect_chiller()
@@ -262,6 +268,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             if self.chiller_model is None:
                 return
             await self.chiller_model.disconnect()
+            # Delete the chiller model because the config may change.
             self.chiller_model = None
         except Exception as e:
             self.log.warning(f"Failed to disconnect chiller; continuing: {e!r}")
@@ -273,6 +280,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             if self.lamp_model is None:
                 return
             await self.lamp_model.disconnect()
+            # Delete the lamp model because the config may change.
             self.lamp_model = None
         except Exception as e:
             self.log.warning(f"Failed to disconnect lamp; continuing: {e!r}")
@@ -451,7 +459,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
         if not self.chiller_connected:
             raise salobj.ExpectedError("Chiller not connected")
         if self.lamp_connected:
-            if self.lamp_model.lamp_on:
+            if self.lamp_model.lamp_was_on:
                 raise salobj.ExpectedError("Can't stop cooling while the lamp is on")
             remaining = self.lamp_model.get_remaining_cooldown()
             if remaining > 0:
@@ -518,7 +526,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             )
 
         # Fault if the lamp is on and the chiller is not chilling
-        if self.lamp_model.lamp_on:
+        if self.lamp_model.lamp_was_on:
             if chiller_watchdog.controllerState != ChillerControllerState.RUN:
                 return await self.fault(
                     code=ErrorCode.NOT_CHILLING_WITH_LAMP_ON,

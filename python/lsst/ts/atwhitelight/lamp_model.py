@@ -91,12 +91,8 @@ class LampModel:
 
     Attributes
     ----------
-    default_power : float 800-1200
-        Default power after the lamp is started (Watts)
-    off_time : float
-        Time at which the lamp was last turned off (TAI unix seconds)
-    on_time : float
-        Time at which the lamp was last turned on (TAI unix seconds)
+    default_power : `float`
+        Default power after the lamp is started (Watts) in range 800-1200.
     """
 
     def __init__(
@@ -146,8 +142,6 @@ class LampModel:
         )
         self.status_task = utils.make_done_future()
         self.lamp_on = False
-        self.lamp_off_time = 0
-        self.lamp_on_time = 0
         # Set this true any time the blinking error signal is off
         # for at least ERROR_BLINKING_DURATION seconds.
         # This helps decode error signals.
@@ -194,6 +188,24 @@ class LampModel:
     def status_seen(self):
         """Return True if connected and status has been seen."""
         return self.connected and self.status_event.is_set()
+
+    @property
+    def lamp_off_time(self):
+        """Get the lamp off time, or 0 if unknown."""
+        return self.topics.lamp_off_time
+
+    @property
+    def lamp_on_time(self):
+        """Get the lamp on time, or 0 if unknown."""
+        return self.topics.lamp_on_time
+
+    @lamp_off_time.setter
+    def lamp_off_time(self, lamp_off_time):
+        self.topics.lamp_off_time = lamp_off_time
+
+    @lamp_on_time.setter
+    def lamp_on_time(self, lamp_on_time):
+        self.topics.lamp_on_time = lamp_on_time
 
     def get_state(self):
         """Get the current evt_lampState data.
