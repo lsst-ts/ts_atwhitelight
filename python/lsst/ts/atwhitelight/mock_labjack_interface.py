@@ -108,7 +108,8 @@ class MockLabJackInterface(LabJackInterface):
         if not simulate:
             raise ValueError("simulate must be true")
 
-        self.set_power = 0
+        # Voltage that specifies the lamp power (V)
+        self.lamp_set_voltage = 0
 
         # Time to open or close the shutter (seconds)
         self.shutter_duration = 1
@@ -150,7 +151,7 @@ class MockLabJackInterface(LabJackInterface):
 
         data.standby_or_on = False
         data.cooldown = False
-        if self.set_power == 0:
+        if self.lamp_set_voltage == 0:
             off_duration = utils.current_tai() - self.lamp_off_time
             if off_duration > self.cooldown_duration:
                 data.standby_or_on = True
@@ -168,6 +169,7 @@ class MockLabJackInterface(LabJackInterface):
         data.blinking_error = self.blinking_error
         data.shutter_open = self.shutter_open_switch
         data.shutter_closed = self.shutter_closed_switch
+        data.read_lamp_set_voltage = self.lamp_set_voltage
         return data
 
     async def write(self, **kwargs):
@@ -175,20 +177,23 @@ class MockLabJackInterface(LabJackInterface):
 
         # The lamp controller power signal reads a voltage of
         # 5V for 1200W down to 1.961 for 800W, or 0 for off.
-        set_power = kwargs.get("set_power", None)
-        if set_power is not None:
-            if set_power == 0:
-                if self.set_power > 0:
+        lamp_set_voltage = kwargs.get("lamp_set_voltage", None)
+        if lamp_set_voltage is not None:
+            if lamp_set_voltage == 0:
+                if self.lamp_set_voltage > 0:
                     self.lamp_off_time = utils.current_tai()
             else:
-                if set_power < VOLTS_AT_MIN_POWER or set_power > VOLTS_AT_MAX_POWER:
+                if (
+                    lamp_set_voltage < VOLTS_AT_MIN_POWER
+                    or lamp_set_voltage > VOLTS_AT_MAX_POWER
+                ):
                     raise RuntimeError(
-                        f"Invalid set_power={set_power} must be 0 or in range "
+                        f"Invalid lamp_set_voltage={lamp_set_voltage} must be 0 or in range "
                         f"[{VOLTS_AT_MIN_POWER}, {VOLTS_AT_MAX_POWER}] V"
                     )
-                if self.set_power == 0:
+                if self.lamp_set_voltage == 0:
                     self.lamp_on_time = utils.current_tai()
-            self.set_power = set_power
+            self.lamp_set_voltage = lamp_set_voltage
 
         shutter_direction = kwargs.get("shutter_direction")
         if shutter_direction is not None:

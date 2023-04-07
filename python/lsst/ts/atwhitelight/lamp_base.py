@@ -32,6 +32,7 @@ __all__ = [
     "VOLTS_AT_MIN_POWER",
     "VOLTS_AT_MAX_POWER",
     "VOLTS_PER_WATT",
+    "power_from_voltage",
     "voltage_from_power",
 ]
 
@@ -70,9 +71,12 @@ class LabJackChannels:
         error_exists="FIO7",
         shutter_open="EIO4",
         shutter_closed="EIO6",
+        # read_lamp_set_voltage can either be the output DAC used for
+        # lamp_set_voltage, or a separate analog input that reads the voltage.
+        read_lamp_set_voltage="DAC0",
     )
     write = dict(
-        set_power="DAC0",
+        lamp_set_voltage="DAC0",
         shutter_enable="EIO3",  # 0=enable
         shutter_direction="EIO2",  # 0=open
     )
@@ -86,11 +90,50 @@ VOLTS_AT_MAX_POWER = 5
 VOLTS_PER_WATT = (VOLTS_AT_MAX_POWER - VOLTS_AT_MIN_POWER) / (MAX_POWER - MIN_POWER)
 
 
+def power_from_voltage(voltage, atol=0.1):
+    """Compute requested lamp power from set voltage.
+
+    Note that the KiloArc quantizes power in 2.3W steps,
+    and the LabJack quantizes its DAC outputs.
+    Neither of these is handled by this function,
+    beyond providing the atol argument.
+
+    Parameters
+    ----------
+    voltage : `float`
+        The voltage to provide to the lamp power input of the KiloArc
+        lamp controller (V).
+    atol : `float`
+        Absolulute tolerance for range checking (V).
+        This allows for quantization error and electrical noise.
+
+    Returns
+    -------
+    power : `float`
+        Desired lamp power (W)
+
+    Raises
+    ------
+    lsst.ts.salobj.ExpectedError
+        If voltage < VOLTS_AT_MIN_POWER - atol
+        or voltage > VOLTS_AT_MAX_POWER + atol
+    """
+    if abs(voltage) < atol:
+        return 0
+    if not VOLTS_AT_MIN_POWER - atol <= voltage <= VOLTS_AT_MAX_POWER + atol:
+        raise salobj.ExpectedError(
+            f"{voltage=} not in range "
+            f"[{VOLTS_AT_MIN_POWER - atol=}, {VOLTS_AT_MAX_POWER + atol}]"
+        )
+    return (voltage - VOLTS_AT_MIN_POWER) / VOLTS_PER_WATT + MIN_POWER
+
+
 def voltage_from_power(power):
     """Compute voltage to provide to the lamp power input of the KiloArc
     lamp controller.
 
     Note that the KiloArc quantizes power to in 2.3W steps.
+    That quantization is not handled in this function.
 
     Parameters
     ----------
