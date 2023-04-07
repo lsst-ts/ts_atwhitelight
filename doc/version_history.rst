@@ -6,11 +6,13 @@
 Version History
 ###############
 
-v0.2.5
+v0.3.0
 ------
 
 * Support the new photo sensor.
   This requires ts_idl 4.4 and ts_config_atcalsys 0.7.
+* Read lamp set voltage from the DAC; this is more robust way to determine if the lamp has been commanded on.
+  One side effect is the reported lamp power will usually differ slightly from the commanded power, due to quantization in the LabJack.
 * ``Jenkinsfile``: fix module name.
 * Remove scons support.
 
