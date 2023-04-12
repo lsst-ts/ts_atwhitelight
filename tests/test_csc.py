@@ -26,8 +26,8 @@ import unittest
 
 import pytest
 from lsst.ts import atwhitelight, salobj
-from lsst.ts.atwhitelight.chiller_model import READ_RETURN_TEMPERATURE
 from lsst.ts.atwhitelight import ErrorCode
+from lsst.ts.atwhitelight.chiller_model import READ_RETURN_TEMPERATURE
 from lsst.ts.idl.enums.ATWhiteLight import (
     ChillerControllerState,
     LampBasicState,
@@ -35,6 +35,7 @@ from lsst.ts.idl.enums.ATWhiteLight import (
     LampControllerState,
     ShutterState,
 )
+from lsst.ts.utils import current_tai
 
 STD_TIMEOUT = 30  # standard command timeout (sec)
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
@@ -162,7 +163,15 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
+                basicState=LampBasicState.UNKNOWN,
+                controllerState=LampControllerState.UNKNOWN,
+                controllerError=LampControllerError.UNKNOWN,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
                 basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.STANDBY,
+                controllerError=LampControllerError.NONE,
             )
 
             await self.remote.cmd_startChiller.start()
@@ -171,10 +180,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_ON,
+                controllerState=LampControllerState.ON,
+                controllerError=LampControllerError.NONE,
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.WARMUP,
+                controllerState=LampControllerState.ON,
+                controllerError=LampControllerError.NONE,
             )
 
             mock_chiller = self.csc.chiller_model.mock_chiller
@@ -188,6 +201,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_OFF,
+                controllerState=LampControllerState.COOLDOWN,
+                controllerError=LampControllerError.NONE,
             )
             await self.check_fault_to_standby_while_cooling(can_recover=False)
 
@@ -198,10 +213,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
+            self.csc.chiller_make_connect_time_out = True
             await self.assert_next_summary_state(salobj.State.STANDBY)
-            await self.remote.cmd_start.set_start(
-                configurationOverride="short_chiller_connect_timeout.yaml"
-            )
+            await self.remote.cmd_start.set_start()
             await self.assert_next_summary_state(salobj.State.FAULT)
             await self.remote.cmd_standby.set_start()
             await self.assert_next_summary_state(salobj.State.STANDBY)
@@ -219,7 +233,15 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
+                basicState=LampBasicState.UNKNOWN,
+                controllerState=LampControllerState.UNKNOWN,
+                controllerError=LampControllerError.UNKNOWN,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
                 basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.STANDBY,
+                controllerError=LampControllerError.NONE,
             )
 
             await self.remote.cmd_startChiller.start()
@@ -228,10 +250,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_ON,
+                controllerState=LampControllerState.ON,
+                controllerError=LampControllerError.NONE,
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.WARMUP,
+                controllerState=LampControllerState.ON,
+                controllerError=LampControllerError.NONE,
             )
 
             # Kill the connection to the chiller.
@@ -262,7 +288,15 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
+                basicState=LampBasicState.UNKNOWN,
+                controllerError=LampControllerError.UNKNOWN,
+                controllerState=LampControllerState.UNKNOWN,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
                 basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.STANDBY,
+                controllerError=LampControllerError.NONE,
             )
 
             await self.remote.cmd_startChiller.start()
@@ -275,6 +309,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.WARMUP,
+                controllerState=LampControllerState.ON,
+                controllerError=LampControllerError.NONE,
             )
 
             await self.csc.chiller_model.stop_cooling()
@@ -290,7 +326,12 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 controllerState=LampControllerState.COOLDOWN,
                 controllerError=LampControllerError.NONE,
             )
-
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.COOLDOWN,
+                controllerState=LampControllerState.COOLDOWN,
+                controllerError=LampControllerError.NONE,
+            )
             await self.check_fault_to_standby_while_cooling(can_recover=True)
 
     async def test_chiller_pump_off_turns_lamp_off(self):
@@ -306,7 +347,15 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
+                basicState=LampBasicState.UNKNOWN,
+                controllerState=LampControllerState.UNKNOWN,
+                controllerError=LampControllerError.UNKNOWN,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
                 basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.STANDBY,
+                controllerError=LampControllerError.NONE,
             )
 
             await self.remote.cmd_startChiller.start()
@@ -315,10 +364,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_ON,
+                controllerState=LampControllerState.ON,
+                controllerError=LampControllerError.NONE,
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.WARMUP,
+                controllerState=LampControllerState.ON,
+                controllerError=LampControllerError.NONE,
             )
 
             self.csc.chiller_model.mock_chiller.pump_running = False
@@ -331,10 +384,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_OFF,
+                controllerState=LampControllerState.COOLDOWN,
+                controllerError=LampControllerError.NONE,
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.COOLDOWN,
+                controllerState=LampControllerState.COOLDOWN,
+                controllerError=LampControllerError.NONE,
             )
             await self.check_fault_to_standby_while_cooling(can_recover=True)
 
@@ -401,46 +458,56 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             simulation_mode=1,
         ):
             await self.assert_next_summary_state(state=salobj.State.DISABLED)
-            while True:
-                data = await self.remote.evt_lampState.next(
-                    flush=False, timeout=STD_TIMEOUT
-                )
-                assert data.controllerError == LampControllerError.NONE
-                if (
-                    data.controllerState == LampControllerState.STANDBY_OR_ON
-                    and data.setPower == 0
-                ):
-                    break
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.UNKNOWN,
+                controllerState=LampControllerState.UNKNOWN,
+                controllerError=LampControllerError.UNKNOWN,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.STANDBY,
+                controllerError=LampControllerError.NONE,
+            )
 
             self.csc.lamp_model.labjack.set_error(LampControllerError.ACCESS_DOOR)
-            data = await self.remote.evt_lampState.next(
-                flush=False, timeout=STD_TIMEOUT
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.ERROR,
+                controllerError=LampControllerError.UNKNOWN,
             )
-            assert data.controllerError == LampControllerError.UNKNOWN
             await self.assert_next_summary_state(salobj.State.FAULT)
 
             # Required time to decode the blinking error signal
             # is the value of the error enum + 1 second
             decode_duration = int(LampControllerError.ACCESS_DOOR) + 1
-            data = await self.remote.evt_lampState.next(
-                flush=False, timeout=STD_TIMEOUT + decode_duration
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.ERROR,
+                controllerError=LampControllerError.ACCESS_DOOR,
+                timeout=STD_TIMEOUT + decode_duration,
             )
-            assert data.controllerError == LampControllerError.ACCESS_DOOR
 
             self.csc.lamp_model.labjack.set_error(LampControllerError.NONE)
-            data = await self.remote.evt_lampState.next(
-                flush=False, timeout=STD_TIMEOUT
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.STANDBY,
+                controllerError=LampControllerError.NONE,
             )
-            assert data.controllerError == LampControllerError.NONE
 
             # Now test an error code that is larger than any known
             too_large_error_code = max(LampControllerError) + 1
             self.csc.lamp_model.labjack.set_error(too_large_error_code)
-            data = await self.remote.evt_lampState.next(
-                flush=False, timeout=STD_TIMEOUT
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.OFF,
+                controllerState=LampControllerState.ERROR,
+                controllerError=LampControllerError.UNKNOWN,
             )
-            assert data.controllerError == LampControllerError.UNKNOWN
-
             await asyncio.sleep(too_large_error_code + 1)
             assert (
                 self.csc.evt_lampState.data.controllerError
@@ -454,10 +521,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
+            self.csc.lamp_make_connect_time_out = True
             await self.assert_next_summary_state(salobj.State.STANDBY)
-            await self.remote.cmd_start.set_start(
-                configurationOverride="short_lamp_connect_timeout.yaml"
-            )
+            await self.remote.cmd_start.set_start()
             await self.assert_next_summary_state(salobj.State.FAULT)
             await self.remote.cmd_standby.set_start()
             await self.assert_next_summary_state(salobj.State.STANDBY)
@@ -483,41 +549,59 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
+                basicState=LampBasicState.UNKNOWN,
+                controllerState=LampControllerState.UNKNOWN,
+                controllerError=LampControllerError.UNKNOWN,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
                 basicState=LampBasicState.OFF,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.STANDBY,
                 controllerError=LampControllerError.NONE,
             )
 
             await self.remote.cmd_startChiller.start()
 
             await self.remote.cmd_turnLampOn.start()
-            await self.assert_next_sample(
+            data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_ON,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.ON,
                 controllerError=LampControllerError.NONE,
+                cooldownEndTime=0,
             )
+            assert data.setPower == pytest.approx(self.csc.config.lamp.default_power)
+            previous_set_power = data.setPower
+            previous_warmup_end_time = data.warmupEndTime
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.WARMUP,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.ON,
                 controllerError=LampControllerError.NONE,
+                setPower=previous_set_power,
+                cooldownEndTime=0,
+                warmupEndTime=previous_warmup_end_time,
             )
 
-            # Disconnect lamp
+            # Disconnect lamp.
             await self.csc.lamp_model.disconnect()
             await self.assert_next_sample(
                 topic=self.remote.evt_lampConnected,
                 connected=False,
             )
-            await self.assert_next_sample(
+            # The CSC has no idea if the lamp is on or off,
+            # so does not set lamp_off_time, so cooldownEndTime=0.
+            data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
-                basicState=LampBasicState.COOLDOWN,
+                basicState=LampBasicState.UNKNOWN,
                 controllerState=LampControllerState.UNKNOWN,
                 controllerError=LampControllerError.UNKNOWN,
+                setPower=0,
+                cooldownEndTime=0,
+                warmupEndTime=previous_warmup_end_time,
             )
 
-            # The CSC should react by going to fault
+            # The CSC should react by going to fault.
             await self.assert_next_summary_state(salobj.State.FAULT)
             await self.assert_next_sample(
                 topic=self.remote.evt_errorCode,
@@ -526,29 +610,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             assert self.csc.chiller_connected
             assert not self.csc.lamp_connected
 
-            # It should be possible to go to standby immediately.
-            # The lamp needs to cool down, but we lost all knowledge
-            # of that when we disconnected.
+            # It should be possible to go to standby immediately
+            # because we lost the knowledge needed to know if we need to wait.
+            # Note: in a real system the lamp will still be on, but in
+            # simulation mode the mock labjack interface is destroyed when
+            # the lamp model disconnects, so don't try to test that.
             await self.remote.cmd_standby.start()
-
-            # Check that the cooldown timers are still running
-            await self.remote.cmd_start.set_start(configurationOverride="")
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampConnected,
-                connected=True,
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampState,
-                basicState=LampBasicState.TURNING_OFF,
-                controllerState=LampControllerState.COOLDOWN,
-                controllerError=LampControllerError.NONE,
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampState,
-                basicState=LampBasicState.COOLDOWN,
-                controllerState=LampControllerState.COOLDOWN,
-                controllerError=LampControllerError.NONE,
-            )
+            await self.assert_next_summary_state(state=salobj.State.STANDBY)
 
     async def test_lamp_error_turns_lamp_off(self):
         async with self.make_csc(
@@ -563,27 +631,41 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
+                basicState=LampBasicState.UNKNOWN,
+                controllerState=LampControllerState.UNKNOWN,
+                controllerError=LampControllerError.UNKNOWN,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
                 basicState=LampBasicState.OFF,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.STANDBY,
                 controllerError=LampControllerError.NONE,
             )
 
             await self.remote.cmd_startChiller.start()
 
             await self.remote.cmd_turnLampOn.start()
-            await self.assert_next_sample(
+            data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_ON,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.ON,
                 controllerError=LampControllerError.NONE,
+                cooldownEndTime=0,
             )
+            assert data.setPower == pytest.approx(self.csc.config.lamp.default_power)
+            previous_set_power = data.setPower
+            previous_warmup_end_time = data.warmupEndTime
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.WARMUP,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.ON,
                 controllerError=LampControllerError.NONE,
+                setPower=previous_set_power,
+                cooldownEndTime=0,
+                warmupEndTime=previous_warmup_end_time,
             )
 
+            start_tai = current_tai()
             # Put lamp controller into error state; any error will do
             self.csc.lamp_model.labjack.set_error(LampControllerError.LAMP_STUCK_ON)
             await self.assert_next_sample(
@@ -600,11 +682,16 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 topic=self.remote.evt_errorCode,
                 errorCode=ErrorCode.LAMP_ERROR,
             )
-            await self.assert_next_sample(
+            data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_OFF,
                 controllerState=LampControllerState.ERROR,
                 controllerError=LampControllerError.UNKNOWN,
+                setPower=0,
+                warmupEndTime=previous_warmup_end_time,
+            )
+            assert (
+                data.cooldownEndTime >= start_tai + self.csc.config.lamp.cooldown_period
             )
             assert self.csc.chiller_connected
             assert self.csc.lamp_connected
@@ -623,8 +710,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
+                basicState=LampBasicState.UNKNOWN,
+                controllerState=LampControllerState.UNKNOWN,
+                controllerError=LampControllerError.UNKNOWN,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
                 basicState=LampBasicState.OFF,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.STANDBY,
                 controllerError=LampControllerError.NONE,
             )
             self.csc.lamp_model.labjack.allow_photosensor_off = False
@@ -635,13 +728,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_ON,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.ON,
                 controllerError=LampControllerError.NONE,
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.WARMUP,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.ON,
                 controllerError=LampControllerError.NONE,
             )
             await self.remote.cmd_turnLampOff.set_start(force=True)
@@ -665,9 +758,12 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.UNEXPECTEDLY_ON,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.STANDBY,
                 controllerError=LampControllerError.NONE,
             )
+
+            await self.remote.cmd_standby.start()
+            await self.assert_next_summary_state(state=salobj.State.STANDBY)
 
     async def test_lamp_fails_to_turn_on(self):
         async with self.make_csc(
@@ -682,8 +778,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
+                basicState=LampBasicState.UNKNOWN,
+                controllerState=LampControllerState.UNKNOWN,
+                controllerError=LampControllerError.UNKNOWN,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
                 basicState=LampBasicState.OFF,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.STANDBY,
                 controllerError=LampControllerError.NONE,
             )
             self.csc.lamp_model.labjack.allow_photosensor_on = False
@@ -694,13 +796,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_ON,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.ON,
                 controllerError=LampControllerError.NONE,
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.UNEXPECTEDLY_OFF,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.ON,
                 controllerError=LampControllerError.NONE,
             )
             await self.assert_next_summary_state(state=salobj.State.FAULT)
@@ -720,6 +822,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
+            await self.assert_next_summary_state(state=salobj.State.STANDBY)
             await self.assert_next_sample(
                 topic=self.remote.evt_chillerConnected, connected=False
             )
@@ -728,6 +831,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
 
             await self.remote.cmd_start.start()
+            await self.assert_next_summary_state(state=salobj.State.DISABLED)
             await self.assert_next_sample(
                 topic=self.remote.evt_chillerConnected, connected=True
             )
@@ -736,6 +840,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
 
             await self.remote.cmd_standby.start()
+            await self.assert_next_summary_state(state=salobj.State.STANDBY)
             await self.assert_next_sample(
                 topic=self.remote.evt_chillerConnected, connected=False
             )
@@ -744,6 +849,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
 
             await self.remote.cmd_start.start()
+            await self.assert_next_summary_state(state=salobj.State.DISABLED)
             await self.assert_next_sample(
                 topic=self.remote.evt_chillerConnected, connected=True
             )
@@ -951,10 +1057,21 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
+                basicState=LampBasicState.UNKNOWN,
+                controllerState=LampControllerState.UNKNOWN,
+                controllerError=LampControllerError.UNKNOWN,
+                setPower=0,
+                cooldownEndTime=0,
+                warmupEndTime=0,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
                 basicState=LampBasicState.OFF,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.STANDBY,
                 controllerError=LampControllerError.NONE,
                 setPower=0,
+                cooldownEndTime=0,
+                warmupEndTime=0,
             )
 
             # Cannot turn on lamp while not cooling
@@ -970,22 +1087,29 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 warningsPresent=0,
             )
 
+            start_tai = current_tai()
             on_power = 922  # Arbitrary valid value
             await self.remote.cmd_turnLampOn.set_start(power=on_power)
             data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_ON,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.ON,
                 controllerError=LampControllerError.NONE,
+                cooldownEndTime=0,
             )
             assert data.setPower == pytest.approx(on_power)
+            assert data.warmupEndTime >= start_tai + self.csc.config.lamp.warmup_period
+            previous_power = data.setPower
+            previous_warmupEndTime = data.warmupEndTime
             data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.WARMUP,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.ON,
                 controllerError=LampControllerError.NONE,
+                setPower=previous_power,
+                cooldownEndTime=0,
+                warmupEndTime=previous_warmupEndTime,
             )
-            assert data.setPower == pytest.approx(on_power)
 
             # Can start cooling while cooling
             await self.remote.cmd_startChiller.start()
@@ -999,8 +1123,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.WARMUP,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.ON,
                 controllerError=LampControllerError.NONE,
+                cooldownEndTime=0,
+                warmupEndTime=previous_warmupEndTime,
             )
             assert data.setPower == pytest.approx(self.csc.config.lamp.default_power)
 
@@ -1012,6 +1138,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             with pytest.raises(salobj.AckError):
                 await self.remote.cmd_turnLampOff.start()
 
+            start_tai = current_tai()
             await self.remote.cmd_turnLampOff.set_start(force=True)
             data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
@@ -1019,13 +1146,20 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 controllerState=LampControllerState.COOLDOWN,
                 controllerError=LampControllerError.NONE,
                 setPower=0,
+                warmupEndTime=previous_warmupEndTime,
             )
+            assert (
+                data.cooldownEndTime >= start_tai + self.csc.config.lamp.cooldown_period
+            )
+            previous_cooldownEndTime = data.cooldownEndTime
             data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.COOLDOWN,
                 controllerState=LampControllerState.COOLDOWN,
                 controllerError=LampControllerError.NONE,
                 setPower=0,
+                cooldownEndTime=previous_cooldownEndTime,
+                warmupEndTime=previous_warmupEndTime,
             )
             data = await self.remote.evt_lampOnHours.next(
                 flush=False, timeout=STD_TIMEOUT
@@ -1049,14 +1183,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.COOLDOWN,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.STANDBY,
                 controllerError=LampControllerError.NONE,
                 setPower=0,
             )
             data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.OFF,
-                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerState=LampControllerState.STANDBY,
                 controllerError=LampControllerError.NONE,
                 setPower=0,
             )
