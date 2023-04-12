@@ -229,7 +229,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
         if self.chiller_model is None:
             self.chiller_model = ChillerModel(
                 config=self.config.chiller,
-                topics=self,
+                csc=self,
                 log=self.log,
                 status_callback=self.status_callback,
                 simulate=self.simulation_mode != 0,
@@ -251,7 +251,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
         if self.lamp_model is None:
             self.lamp_model = LampModel(
                 config=self.config.lamp,
-                topics=self,
+                csc=self,
                 log=self.log,
                 status_callback=self.status_callback,
                 simulate=self.simulation_mode != 0,

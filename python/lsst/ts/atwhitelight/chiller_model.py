@@ -76,8 +76,8 @@ class ChillerModel:
     ----------
     config : `types.SimpleNamespace`
         Chiller-specific configuration.
-    topics : `lsst.ts.salobj.BaseCsc` or `types.SimpleNamespace`
-        The CSC or a struct with chiller-specific write topics.
+    csc : `lsst.ts.salobj.BaseCsc`
+        The CSC. This class writes to chiller-specific event topics.
     log : `logging.Logger`
         Logger.
     status_callback : `awaitable` or `None`
@@ -106,7 +106,7 @@ class ChillerModel:
     def __init__(
         self,
         config,
-        topics,
+        csc,
         log,
         status_callback,
         simulate,
@@ -120,14 +120,14 @@ class ChillerModel:
             )
 
         self.config = config
-        self.topics = topics
+        self.csc = csc
         self.log = log.getChild("ChillerModel")
         self.status_callback = status_callback
         self.simulate = simulate
         self.make_connect_time_out = make_connect_time_out
 
         self.device_id = "01"
-        self.topics.tel_chillerTemperatures.set(
+        self.csc.tel_chillerTemperatures.set(
             setTemperature=self.config.initial_temperature,
             supplyTemperature=math.nan,
             returnTemperature=math.nan,
@@ -245,7 +245,7 @@ class ChillerModel:
             await asyncio.wait_for(
                 self.client.start_task, timeout=self.config.connect_timeout
             )
-            await self.topics.evt_chillerConnected.set_write(connected=True)
+            await self.csc.evt_chillerConnected.set_write(connected=True)
             self.log.debug("Connected; configure chiller")
             await self.configure_chiller()
             await self.do_watchdog()
@@ -263,7 +263,7 @@ class ChillerModel:
         try:
             was_connected = self.connected
             self.configured_event.clear()
-            await self.topics.evt_chillerConnected.set_write(connected=False)
+            await self.csc.evt_chillerConnected.set_write(connected=False)
             self.watchdog_task.cancel()
             self.telemetry_task.cancel()
             self.reset_seen()
@@ -504,10 +504,10 @@ class ChillerModel:
             raise RuntimeError("Not connected")
         if (
             not self.configured_event.is_set()
-            or not self.topics.evt_chillerWatchdog.has_data
+            or not self.csc.evt_chillerWatchdog.has_data
         ):
             raise RuntimeError("Bug: connected but watchdog data not available")
-        return self.topics.evt_chillerWatchdog.data
+        return self.csc.evt_chillerWatchdog.data
 
     async def handle_reply(self, reply):
         """Handle a reply.
@@ -563,10 +563,10 @@ class ChillerModel:
             )
         field_name = f"fan{fan_num}"
         speed = float(data)
-        self.topics.tel_chillerFanSpeeds.set(**{field_name: speed})
+        self.csc.tel_chillerFanSpeeds.set(**{field_name: speed})
         self.seen_fan_speeds.add(field_name)
         if len(self.seen_fan_speeds) == len(FAN_NUMBERS):
-            await self.topics.tel_chillerFanSpeeds.write()
+            await self.csc.tel_chillerFanSpeeds.write()
             self.seen_fan_speeds = set()
 
     async def handle_read_l1_alarms(self, data):
@@ -575,9 +575,9 @@ class ChillerModel:
         # for the reason.
         mask = int(data[::-1], 16)
         self.seen_alarms.add("level1")
-        self.topics.evt_chillerAlarms.set(level1=mask)
+        self.csc.evt_chillerAlarms.set(level1=mask)
         if len(self.seen_alarms) == 3:
-            await self.topics.evt_chillerAlarms.write()
+            await self.csc.evt_chillerAlarms.write()
             self.seen_alarms = set()
 
     async def handle_read_l2_alarms(self, data):
@@ -588,27 +588,27 @@ class ChillerModel:
         mask = int(data[1:][::-1], 16)
         if sublevel == "1":
             self.seen_alarms.add("level21")
-            self.topics.evt_chillerAlarms.set(level21=mask)
+            self.csc.evt_chillerAlarms.set(level21=mask)
         elif sublevel == "2":
             self.seen_alarms.add("level22")
-            self.topics.evt_chillerAlarms.set(level22=mask)
+            self.csc.evt_chillerAlarms.set(level22=mask)
         else:
             self.log.warning(f"Cannot parse level 2 alarm data={data!r}")
         if len(self.seen_alarms) == 3:
-            await self.topics.evt_chillerAlarms.write()
+            await self.csc.evt_chillerAlarms.write()
             self.seen_alarms = set()
 
     async def handle_read_coolant_flow_rate(self, data):
         # flow uses the same formatting as temp
         flow = self.parse_flow(data)
-        await self.topics.tel_chillerCoolantFlow.set_write(flow=flow)
+        await self.csc.tel_chillerCoolantFlow.set_write(flow=flow)
 
     async def handle_read_tec_bank_currents(self, data, field_name):
         current = self.parse_current(data)
-        self.topics.tel_chillerTECBankCurrents.set(**{field_name: current})
+        self.csc.tel_chillerTECBankCurrents.set(**{field_name: current})
         self.seen_tec_bank_currents.add(field_name)
         if len(self.seen_tec_bank_currents) >= 2:
-            await self.topics.tel_chillerTECBankCurrents.write()
+            await self.csc.tel_chillerTECBankCurrents.write()
             self.seen_tec_bank_currents = set()
 
     async def handle_read_tec_drive_level(self, data):
@@ -618,16 +618,14 @@ class ChillerModel:
             self.log.warning(f"Unrecognized cooling mode {data[4]}; should be C or H")
             return
         level = float(data[:3])
-        await self.topics.tel_chillerTECDrive.set_write(
-            isCooling=is_cooling, level=level
-        )
+        await self.csc.tel_chillerTECDrive.set_write(isCooling=is_cooling, level=level)
 
     async def handle_read_temperature(self, data, field_name):
         value = self.parse_temperature(data)
-        self.topics.tel_chillerTemperatures.set(**{field_name: value})
+        self.csc.tel_chillerTemperatures.set(**{field_name: value})
         self.seen_temperatures.add(field_name)
         if len(self.seen_temperatures) == NUM_READ_TEMPERATURES:
-            await self.topics.tel_chillerTemperatures.write()
+            await self.csc.tel_chillerTemperatures.write()
             self.seen_temperatures = set()
 
     async def handle_read_warnings(self, data):
@@ -635,7 +633,7 @@ class ChillerModel:
         # See note in lsst.ts.idl.enums.ATWhiteLight.ChillerL1Alarms
         # for the reason.
         mask = int(data[::-1], 16)
-        await self.topics.evt_chillerWarnings.set_write(warnings=mask)
+        await self.csc.evt_chillerWarnings.set_write(warnings=mask)
 
     async def handle_set_alarm_threshold(self, data):
         pass
@@ -667,7 +665,7 @@ class ChillerModel:
             alarms_present = True
             warnings_present = True
 
-        result = await self.topics.evt_chillerWatchdog.set_write(
+        result = await self.csc.evt_chillerWatchdog.set_write(
             controllerState=controller_state,
             pumpRunning=pump_running,
             alarmsPresent=alarms_present,
@@ -686,15 +684,13 @@ class ChillerModel:
             await self.do_read_l2_alarms(sublevel=1)
             await self.do_read_l2_alarms(sublevel=2)
         else:
-            await self.topics.evt_chillerAlarms.set_write(
-                level1=0, level21=0, level22=0
-            )
+            await self.csc.evt_chillerAlarms.set_write(level1=0, level21=0, level22=0)
 
         if warnings_present:
             # Get detailed warning information
             await self.do_read_warnings()
         else:
-            await self.topics.evt_chillerWarnings.set_write(warnings=0)
+            await self.csc.evt_chillerWarnings.set_write(warnings=0)
 
         if result.did_change:
             await self.call_status_callback()
@@ -705,7 +701,7 @@ class ChillerModel:
         # I would like to set the control sensor to
         # ChillerControlSensor.RETURN but the T247P doesn't support that.
         await self.do_set_control_temperature(
-            temperature=self.topics.tel_chillerTemperatures.data.setTemperature
+            temperature=self.csc.tel_chillerTemperatures.data.setTemperature
         )
         await self.do_set_alarm_threshold(
             threshold_type=ChillerThresholdType.HighSupplyTemperature,

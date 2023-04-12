@@ -81,10 +81,12 @@ class LampModel:
     ----------
     config : `types.SimpleNamespace`
         Lamp-specific configuration.
-    topics : `lsst.ts.salobj.BaseCsc` or `types.SimpleNamespace`
-        The CSC or a struct with lamp-specific write topics.
+    csc : `lsst.ts.salobj.BaseCsc`
+        The CSC. This class writes to lamp-specific event topics
+        and reads and writes two additional float attributes:
+        ``lamp_on_time`` and ``lamp_off_time``.
     log : `logging.Logger`
-        Logger
+        Logger.
     status_callback : `awaitable` or `None`, optional
         Coroutine to call when evt_lampState or evt_lampConnected changes.
         It receives one argument: this model.
@@ -113,7 +115,7 @@ class LampModel:
     def __init__(
         self,
         config,
-        topics,
+        csc,
         log,
         status_callback=None,
         simulate=False,
@@ -132,7 +134,7 @@ class LampModel:
             )
 
         self.config = config
-        self.topics = topics
+        self.csc = csc
         self.log = log.getChild("LampModel")
         self.make_connect_time_out = make_connect_time_out
         self.status_callback = status_callback
@@ -208,20 +210,20 @@ class LampModel:
     @property
     def lamp_off_time(self):
         """Get the lamp off time, or 0 if unknown."""
-        return self.topics.lamp_off_time
+        return self.csc.lamp_off_time
 
     @property
     def lamp_on_time(self):
         """Get the lamp on time, or 0 if unknown."""
-        return self.topics.lamp_on_time
+        return self.csc.lamp_on_time
 
     @lamp_off_time.setter
     def lamp_off_time(self, lamp_off_time):
-        self.topics.lamp_off_time = lamp_off_time
+        self.csc.lamp_off_time = lamp_off_time
 
     @lamp_on_time.setter
     def lamp_on_time(self, lamp_on_time):
-        self.topics.lamp_on_time = lamp_on_time
+        self.csc.lamp_on_time = lamp_on_time
 
     def get_state(self):
         """Get the current evt_lampState data.
@@ -233,9 +235,9 @@ class LampModel:
         """
         if not self.connected:
             raise RuntimeError("Not connected")
-        if not self.status_event.is_set() or not self.topics.evt_lampState.has_data:
+        if not self.status_event.is_set() or not self.csc.evt_lampState.has_data:
             raise RuntimeError("Status not yet seen")
-        return self.topics.evt_lampState.data
+        return self.csc.evt_lampState.data
 
     async def connect(self):
         try:
@@ -306,10 +308,8 @@ class LampModel:
 
                 if data.error_exists:
                     # Try to decode the blinking error
-                    if self.topics.evt_lampState.has_data:
-                        controller_error = (
-                            self.topics.evt_lampState.data.controllerError
-                        )
+                    if self.csc.evt_lampState.has_data:
+                        controller_error = self.csc.evt_lampState.data.controllerError
                     else:
                         controller_error = LampControllerError.NONE
                     if data.blinking_error:
@@ -411,7 +411,7 @@ class LampModel:
                     light_detected=light_detected,
                     read_lamp_set_voltage=data.read_lamp_set_voltage,
                 )
-                await self.topics.evt_shutterState.set_write(actualState=shutter_state)
+                await self.csc.evt_shutterState.set_write(actualState=shutter_state)
                 if bool(data.shutter_closed):
                     self.shutter_closed_event.set()
                 if bool(data.shutter_open):
@@ -529,7 +529,7 @@ class LampModel:
                 else:
                     basic_state = LampBasicState.OFF
 
-        result1 = await self.topics.evt_lampState.set_write(
+        result1 = await self.csc.evt_lampState.set_write(
             basicState=basic_state,
             controllerError=controller_error,
             controllerState=controller_state,
@@ -542,7 +542,7 @@ class LampModel:
             setPower=lamp_set_power,
         )
 
-        result2 = await self.topics.evt_lampConnected.set_write(
+        result2 = await self.csc.evt_lampConnected.set_write(
             connected=self.labjack.connected
         )
 
@@ -551,7 +551,7 @@ class LampModel:
             await self._set_lamp_power(0)
 
         if on_seconds > 0:
-            await self.topics.evt_lampOnHours.set_write(hours=on_seconds / 3600)
+            await self.csc.evt_lampOnHours.set_write(hours=on_seconds / 3600)
 
         if result1.did_change or result2.did_change:
             await self.call_status_callback()
@@ -608,14 +608,14 @@ class LampModel:
             If both shutter sensing switches are active.
         """
         desired_state = ShutterState.OPEN if do_open else ShutterState.CLOSED
-        if self.topics.evt_shutterState.has_data:
+        if self.csc.evt_shutterState.has_data:
             if (
-                self.topics.evt_shutterState.data.commandedState == desired_state
-                and self.topics.evt_shutterState.data.actualState == desired_state
+                self.csc.evt_shutterState.data.commandedState == desired_state
+                and self.csc.evt_shutterState.data.actualState == desired_state
             ):
                 # Already done
                 return
-            if self.topics.evt_shutterState.data.actualState == ShutterState.INVALID:
+            if self.csc.evt_shutterState.data.actualState == ShutterState.INVALID:
                 raise salobj.ExpectedError(
                     "One or both shutters sensing switches is broken; "
                     "cannot move the shutter"
@@ -627,7 +627,7 @@ class LampModel:
             shutter_direction=SHUTTER_OPEN if do_open else SHUTTER_CLOSE
         )
         await self.labjack.write(shutter_enable=SHUTTER_ENABLE)
-        await self.topics.evt_shutterState.set_write(
+        await self.csc.evt_shutterState.set_write(
             commandedState=desired_state, enabled=True, force_output=True
         )
         shutter_event.clear()
@@ -644,9 +644,9 @@ class LampModel:
             raise
         finally:
             await self.labjack.write(shutter_enable=SHUTTER_DISABLE)
-            await self.topics.evt_shutterState.set_write(enabled=False)
+            await self.csc.evt_shutterState.set_write(enabled=False)
 
-        if self.topics.evt_shutterState.data.actualState == ShutterState.INVALID:
+        if self.csc.evt_shutterState.data.actualState == ShutterState.INVALID:
             raise salobj.ExpectedError(
                 "One or both shutters sensing switches is broken; move failed"
             )
