@@ -302,10 +302,6 @@ class LampModel:
                 async with self.change_power_lock:
                     data = await self.labjack.read()
                 current_tai = utils.current_tai()
-                lamp_commanded_on = (
-                    data.read_lamp_set_voltage > LAMP_SET_VOLTAGE_ON_THRESHOLD
-                )
-
                 if data.error_exists:
                     # Try to decode the blinking error
                     if self.csc.evt_lampState.has_data:
@@ -385,10 +381,7 @@ class LampModel:
                 if data.error_exists:
                     controller_state = LampControllerState.ERROR
                 elif data.standby_or_on:
-                    if lamp_commanded_on:
-                        controller_state = LampControllerState.ON
-                    else:
-                        controller_state = LampControllerState.STANDBY
+                    controller_state = LampControllerState.STANDBY_OR_ON
                 elif data.cooldown:
                     controller_state = LampControllerState.COOLDOWN
                 else:
@@ -533,6 +526,7 @@ class LampModel:
             basicState=basic_state,
             controllerError=controller_error,
             controllerState=controller_state,
+            lightDetected=light_detected,
             cooldownEndTime=offset_timestamp(
                 self.lamp_off_time, self.config.cooldown_period
             ),
