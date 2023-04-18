@@ -794,7 +794,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 controllerError=LampControllerError.NONE,
                 lightDetected=True,
             )
-            await self.remote.cmd_turnLampOff.set_start(force=True)
+            with salobj.assertRaisesAckError():
+                await self.remote.cmd_turnLampOff.set_start(force=True)
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_OFF,
@@ -853,7 +854,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
             await self.remote.cmd_startChiller.start()
 
-            await self.remote.cmd_turnLampOn.start()
+            with salobj.assertRaisesAckError():
+                await self.remote.cmd_turnLampOn.start()
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.TURNING_ON,

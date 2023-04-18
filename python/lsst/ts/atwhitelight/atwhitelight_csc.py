@@ -38,7 +38,7 @@ from lsst.ts.idl.enums.ATWhiteLight import (
 from . import __version__
 from .chiller_model import ChillerModel
 from .config_schema import CONFIG_SCHEMA
-from .lamp_model import LampModel
+from .lamp_model import ONOFF_COMMAND_TIMEOUT_MARGIN, LampModel
 
 
 class ErrorCode(enum.IntEnum):
@@ -194,7 +194,9 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
                         "trying to turn the lamp off immediately."
                     )
                     try:
-                        await self.lamp_model.turn_lamp_off(force=True)
+                        await self.lamp_model.turn_lamp_off(
+                            force=True, wait=False, reason="CSC is going to FAULT state"
+                        )
                     except Exception as e:
                         self.log.error(
                             f"Failed to turn lamp off; please turn it off manually: {e!r}"
@@ -208,7 +210,11 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             self.should_be_connected = False
             if self.lamp_connected and self.lamp_model.lamp_was_on:
                 try:
-                    await self.lamp_model.turn_lamp_off(force=True)
+                    await self.lamp_model.turn_lamp_off(
+                        force=True,
+                        wait=False,
+                        reason=f"CSC is going to state {self.summary_state!r}",
+                    )
                 except Exception as e:
                     self.log.warning(
                         f"Going to state {self.summary_state!r} but failed to turn off lamp: {e!r}; "
@@ -275,7 +281,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
 
     async def disconnect_lamp(self):
         try:
-            # Don't use lamp_connected because that can be false
+            # Don't use self.lamp_connected because that can be false
             # even if a basic connection exists (before status seen)
             if self.lamp_model is None:
                 return
@@ -390,6 +396,10 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             power = self.config.lamp.default_power
         else:
             power = data.power
+        await self.cmd_turnLampOn.ack_in_progress(
+            data=data,
+            timeout=self.config.lamp.max_lamp_on_delay + ONOFF_COMMAND_TIMEOUT_MARGIN,
+        )
         await self.lamp_model.turn_lamp_on(power=power)
 
     async def do_turnLampOff(self, data):
@@ -406,7 +416,15 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
         self.assert_enabled()
         if not self.lamp_connected:
             raise salobj.ExpectedError("Lamp not connected")
-        await self.lamp_model.turn_lamp_off(force=data.force)
+        await self.cmd_turnLampOff.ack_in_progress(
+            data=data,
+            timeout=self.config.lamp.max_lamp_off_delay + ONOFF_COMMAND_TIMEOUT_MARGIN,
+        )
+        # Note: ``reason`` is used if an existing turnLampOn command
+        # has to be aborted; hence the use of "Superseded".
+        await self.lamp_model.turn_lamp_off(
+            force=data.force, wait=True, reason="Superseded by a turnLampOff command"
+        )
 
     async def do_setChillerTemperature(self, data):
         """Sets the target temperature for the chiller
