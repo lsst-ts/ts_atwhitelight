@@ -51,6 +51,11 @@ from .mock_labjack_interface import MockLabJackInterface
 # How long (sec) after writing new power to the LabJack before reading it.
 READ_POWER_DELAY = 0.1
 
+# How much longer (sec) than the max timeout to wait for a lamp on or off
+# command to time out. The margin is intended to avoid a race condition,
+# while also protecting against bugs that could cause an indefinite hang.
+ONOFF_COMMAND_TIMEOUT_MARGIN = 2
+
 # What set lamp voltage indicates that the lamp is commanded to be on?
 # This should be a bit less than the actual min voltage, to allow for
 # quantization error and electrical noise (if reading a sense line instead
@@ -174,6 +179,14 @@ class LampModel:
         self.lamp_unexpectedly_off = False
         self.lamp_unexpectedly_on = False
 
+        # Futures to keep track of when the lamp actually goes on or off.
+        # Used by the CSC to delay the final ack for turnLampOn and turnLampOff
+        # commands. To terminate these, call abort_lamp_on/off_future
+        # (instead of cancelling) in order to provide good feedback
+        # for the turnLampOn or turnLampOff commands.
+        self.lamp_on_future = utils.make_done_future()
+        self.lamp_off_future = utils.make_done_future()
+
         # Was the blinking error signal on last time status was read?
         self.blinking_error_was_on = False
         # Time at which the blinking error signal
@@ -225,6 +238,30 @@ class LampModel:
     def lamp_on_time(self, lamp_on_time):
         self.csc.lamp_on_time = lamp_on_time
 
+    def abort_lamp_on_future(self, reason):
+        """Abort self.lamp_on_future (if not done) with a salobj.ExpectedError
+        exception.
+
+        Parameters
+        ----------
+        reason : `str`
+            The text for the exception.
+        """
+        if not self.lamp_on_future.done():
+            self.lamp_on_future.set_exception(salobj.ExpectedError(reason))
+
+    def abort_lamp_off_future(self, reason):
+        """Abort self.lamp_off_future (if not done) with a salobj.ExpectedError
+        exception.
+
+        Parameters
+        ----------
+        reason : `str`
+            The text for the exception.
+        """
+        if not self.lamp_off_future.done():
+            self.lamp_off_future.set_exception(salobj.ExpectedError(reason))
+
     def get_state(self):
         """Get the current evt_lampState data.
 
@@ -240,6 +277,8 @@ class LampModel:
         return self.csc.evt_lampState.data
 
     async def connect(self):
+        self.abort_lamp_on_future("Connecting to the lamp controller")
+        self.abort_lamp_off_future("Connecting to the lamp controller")
         try:
             await self.basic_disconnect(cancel_status_loop=False)
             self.lamp_unexpectedly_off = False
@@ -278,7 +317,12 @@ class LampModel:
 
     async def basic_disconnect(self, cancel_status_loop):
         if self.connected:
-            await self.turn_lamp_off(force=True)
+            await self.turn_lamp_off(
+                force=True, wait=False, reason="Disconnecting from the lamp controller"
+            )
+        # Paranoia; these futures should both be done.
+        self.abort_lamp_on_future("Disconnecting from the lamp controller")
+        self.abort_lamp_off_future("Disconnecting from the lamp controller")
         if cancel_status_loop:
             self.status_task.cancel()
             self.status_event.clear()
@@ -302,10 +346,6 @@ class LampModel:
                 async with self.change_power_lock:
                     data = await self.labjack.read()
                 current_tai = utils.current_tai()
-                lamp_commanded_on = (
-                    data.read_lamp_set_voltage > LAMP_SET_VOLTAGE_ON_THRESHOLD
-                )
-
                 if data.error_exists:
                     # Try to decode the blinking error
                     if self.csc.evt_lampState.has_data:
@@ -385,10 +425,7 @@ class LampModel:
                 if data.error_exists:
                     controller_state = LampControllerState.ERROR
                 elif data.standby_or_on:
-                    if lamp_commanded_on:
-                        controller_state = LampControllerState.ON
-                    else:
-                        controller_state = LampControllerState.STANDBY
+                    controller_state = LampControllerState.STANDBY_OR_ON
                 elif data.cooldown:
                     controller_state = LampControllerState.COOLDOWN
                 else:
@@ -421,9 +458,14 @@ class LampModel:
         except asyncio.CancelledError:
             self.log.debug("Status loop ends")
         except Exception as e:
-            self.log.exception(f"Status loop failed; disconnecting: {e!r}")
+            error_message = f"Status loop failed; disconnecting: {e!r}"
+            self.log.exception(error_message)
+            self.abort_lamp_on_future(error_message)
+            self.abort_lamp_off_future(error_message)
             await self.disconnect(cancel_status_loop=False)
             raise
+        self.abort_lamp_on_future("Data client shutting down: status loop ends")
+        self.abort_lamp_off_future("Data client shutting down: status loop ends")
 
     async def set_status(
         self,
@@ -533,6 +575,7 @@ class LampModel:
             basicState=basic_state,
             controllerError=controller_error,
             controllerState=controller_state,
+            lightDetected=light_detected,
             cooldownEndTime=offset_timestamp(
                 self.lamp_off_time, self.config.cooldown_period
             ),
@@ -545,6 +588,25 @@ class LampModel:
         result2 = await self.csc.evt_lampConnected.set_write(
             connected=self.labjack.connected
         )
+
+        # Handle the command futures after reporting the state,
+        # in order to make a clearer sequence: ack the command after
+        # reporting the state that shows if it succeeded or failed.
+        if self.connected:
+            match basic_state:
+                case LampBasicState.ON | LampBasicState.WARMUP:
+                    if not self.lamp_on_future.done():
+                        self.lamp_on_future.set_result(None)
+                case LampBasicState.UNEXPECTEDLY_OFF:
+                    self.abort_lamp_on_future("Lamp failed to turn on")
+                case LampBasicState.OFF | LampBasicState.COOLDOWN:
+                    if not self.lamp_off_future.done():
+                        self.lamp_off_future.set_result(None)
+                case LampBasicState.UNEXPECTEDLY_ON:
+                    self.abort_lamp_off_future("Lamp failed to turn off")
+        else:
+            self.abort_lamp_on_future("Lost connection to the lamp controller")
+            self.abort_lamp_off_future("Lost connection to the lamp controller")
 
         # Turn off the lamp controller if the bulb is unexpectedly off.
         if self.lamp_unexpectedly_off and self.connected:
@@ -665,8 +727,13 @@ class LampModel:
         Raises
         ------
         salobj.ExpectedError
-            If the lamp is already on, or is off but still cooling down.
+            If the lamp is already in the process of being turned on,
+            or if the lamp is off but still cooling down.
         """
+        if not self.lamp_on_future.done():
+            # Note: we cannot simply wait for the existing task to finish,
+            # because the new power may not match the old one.
+            raise salobj.ExpectedError("Already turning the lamp on.")
         if power < MIN_POWER or power > MAX_POWER:
             raise salobj.ExpectedError(
                 f"{power} must be in range [{MIN_POWER}, {MAX_POWER}], inclusive"
@@ -678,9 +745,17 @@ class LampModel:
             )
 
         self.lamp_unexpectedly_on = False
+        self.abort_lamp_off_future("Superseded by a turnLampOn command")
+        # Note: if the lamp is already on, then waiting is not strictly
+        # necessary, but it only causes a very minor delay.
+        self.lamp_on_future = asyncio.Future()
         await self._set_lamp_power(power)
+        await asyncio.wait_for(
+            self.lamp_on_future,
+            timeout=self.config.max_lamp_on_delay + ONOFF_COMMAND_TIMEOUT_MARGIN,
+        )
 
-    async def turn_lamp_off(self, force=False):
+    async def turn_lamp_off(self, force, wait, reason):
         """Turn the lamp off (if on). Fail if warming up, unless force=True.
 
         Parameters
@@ -688,6 +763,11 @@ class LampModel:
         force : `bool`
             Force the lamp off, even if warming up.
             This can significantly reduce bulb life.
+        wait : `bool`
+            Wait for the lamp to turn off?
+        reason : `str`
+            Why is the lamp being turned off? Used as the full text of the
+            lamp_on_future exception, if aborting turning on the lamp.
 
         Raises
         ------
@@ -695,6 +775,10 @@ class LampModel:
             If warming up and force=False.
         """
         if not self.lamp_was_on:
+            return
+        if not self.lamp_off_future.done():
+            # The lamp is already being turned off. Wait for it to finish.
+            await self.lamp_off_future
             return
 
         on_duration = utils.current_tai() - self.lamp_on_time
@@ -712,7 +796,14 @@ class LampModel:
                 )
 
         self.lamp_unexpectedly_off = False
+        self.abort_lamp_on_future(reason)
+        self.lamp_off_future = asyncio.Future()
         await self._set_lamp_power(0)
+        if wait:
+            await asyncio.wait_for(
+                self.lamp_off_future,
+                timeout=self.config.max_lamp_off_delay + ONOFF_COMMAND_TIMEOUT_MARGIN,
+            )
 
     async def _set_lamp_power(self, power):
         """Set the desired lamp power.
