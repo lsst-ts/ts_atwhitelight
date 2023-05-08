@@ -28,6 +28,9 @@ The white light system is comprised of the following components:
 
 * A ThermoTek T257P chiller. We have two manuals for this: A :download:`user guide <T257P User Manual_Rev X1_02.pdf>` and a detailed description of the :download:`serial communication protocol <TTK Serial Communication Protocol.pdf>`.
 
+* A TEMT6000 phototransistor which is used to detect if the light is truly on.
+  This is useful because the lamp controller has no such output (it outputs the same signals for "standby" and "on").
+
 * A shutter controlled by a linear actuator.
 
 * A `LabJack T4 <https://labjack.com/products/t4>`_ I/O module to control the lamp controller and linear actuator.

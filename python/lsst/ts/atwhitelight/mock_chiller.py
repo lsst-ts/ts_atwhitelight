@@ -107,7 +107,7 @@ class MockChiller(tcpip.OneClientServer):
             connect_callback=self.connect_callback,
         )
 
-    def connect_callback(self, server):
+    async def connect_callback(self, server):
         self.command_task.cancel()
         if self.connected:
             self.command_task = asyncio.create_task(self.command_loop())

@@ -6,6 +6,24 @@
 Version History
 ###############
 
+v0.3.0
+------
+
+* Support the new photo sensor, including changing the turnLampOn and turnLampOff commands to wait for light to be detected/not detected.
+  This requires ts_xml 16, ts_idl 4.4 and ts_config_atcalsys 0.7.
+* Read lamp set voltage from the DAC; this is a more robust way to determine if the lamp has been commanded on.
+  One side effect is the reported lamp power will usually differ slightly from the commanded power, due to quantization in the LabJack.
+* Use ts_pre_commit_conf to manage pre-commit.
+* ``Jenkinsfile``: use new shared library.
+
+Requires:
+
+* ts_idl 4.4
+* ts_salobj 7.1
+* ts_tcpip
+* ts_utils
+* IDL file for ATWhiteLight built from ts_xml 11.1
+
 v0.2.4
 ------
 

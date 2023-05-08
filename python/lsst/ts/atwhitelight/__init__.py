@@ -24,14 +24,14 @@ try:
 except ImportError:
     __version__ = "?"
 
+from .atwhitelight_commander import *
+from .atwhitelight_csc import *
 from .chiller_base import *
-from .lamp_base import *
-from .config_schema import *
 from .chiller_client import *
 from .chiller_model import *
+from .config_schema import *
 from .labjack_interface import *
+from .lamp_base import *
 from .lamp_model import *
 from .mock_chiller import *
 from .mock_labjack_interface import *
-from .atwhitelight_commander import *
-from .atwhitelight_csc import *
