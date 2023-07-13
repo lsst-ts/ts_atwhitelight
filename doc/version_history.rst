@@ -6,6 +6,12 @@
 Version History
 ###############
 
+v0.3.1
+------
+
+* Update conda recipe.
+* Update pyproject.toml
+
 v0.3.0
 ------
 

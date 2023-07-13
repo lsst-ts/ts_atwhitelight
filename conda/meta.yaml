@@ -7,13 +7,12 @@ source:
   path: ../
 
 build:
-  noarch: generic
-  script: python -m pip install --no-deps --ignore-installed .
+  script: {{ PYTHON }} -m pip install --no-deps --ignore-installed .
+  noarch: python
 
 test:
   requires:
     - ts-conda-build =0.3
-    - ts-dds
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
     - ts-tcpip
@@ -25,18 +24,19 @@ test:
     - setup.cfg
     - pyproject.toml
   commands:
-    - py.test
+    - pytest
 
 requirements:
   host:
-    - python
+    - python {{ python }}
     - pip
     - setuptools_scm
     - setuptools
     - pytest-runner
   run:
-    - python
-    - setuptools
-    - setuptools_scm
+    - python {{ python }}
+    - numpy {{ numpy }}
+    - setuptools {{ setuptools }}
+    - setuptools_scm {{ setuptools_scm }}
     - ts-salobj
     - ts-tcpip
