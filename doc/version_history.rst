@@ -6,6 +6,12 @@
 Version History
 ###############
 
+v0.3.1
+------
+* Remove setup.cfg.
+* Remove pytest plugin calls in pyproject.toml.
+* Fix conda recipe by including {{python}} and removing redundant dependencies.
+
 v0.3.0
 ------
 
