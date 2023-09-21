@@ -117,7 +117,7 @@ class MockChiller(tcpip.OneClientServer):
         self.log.info("command_loop begins")
         try:
             while self.connected:
-                command_bytes = await self.reader.readuntil(b"\r")
+                command_bytes = await self.readuntil(b"\r")
                 # trim the checksum and \r
                 command = command_bytes.decode()[:-3]
                 cmd_id = command[3:5]
@@ -133,7 +133,7 @@ class MockChiller(tcpip.OneClientServer):
                 reply = reply_body + data
                 checksum = ChillerClient.compute_checksum(reply)
                 encoded_reply = f"{reply}{checksum}\r".encode()
-                self.writer.write(encoded_reply)
+                await self.write(encoded_reply)
         except asyncio.CancelledError:
             self.log.info("command_loop ends")
             raise
