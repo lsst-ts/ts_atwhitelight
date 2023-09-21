@@ -9,7 +9,7 @@ tests/.tests
 tests/measurements/*.json
 version.py
 .eggs
-*.egg_info
+*.egg-info
 .vscode
 
 .vscode
