@@ -9,7 +9,7 @@ tests/.tests
 tests/measurements/*.json
 version.py
 .eggs
-*.egg_info
+*.egg-info
 .vscode
 
 .vscode
@@ -17,3 +17,5 @@ version.py
 .flake8
 .isort.cfg
 .mypy.ini
+.clang-format
+.ruff.toml

@@ -39,4 +39,4 @@ requirements:
     - setuptools {{ setuptools }}
     - setuptools_scm {{ setuptools_scm }}
     - ts-salobj
-    - ts-tcpip
+    - ts-tcpip >=1.2
