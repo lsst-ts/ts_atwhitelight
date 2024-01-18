@@ -45,7 +45,7 @@ ERROR_BLINKING_DURATION = 1
 # Must be short enough to reliably follow the blinking error signal
 # (e.g. < ERROR_BLINKING_DURATION / 4 or so).
 # Keeping it short also reduces latency in detecting changes.
-STATUS_INTERVAL = 0.15
+STATUS_INTERVAL = 0.08
 
 # Constants to keep track of the sign of LabJack binary output signals
 SHUTTER_ENABLE = 0

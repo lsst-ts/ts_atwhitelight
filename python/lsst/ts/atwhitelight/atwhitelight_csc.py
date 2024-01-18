@@ -401,6 +401,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             timeout=self.config.lamp.max_lamp_on_delay + ONOFF_COMMAND_TIMEOUT_MARGIN,
         )
         await self.lamp_model.turn_lamp_on(power=power)
+        await self.lamp_model.light_detected_event.wait()
 
     async def do_turnLampOff(self, data):
         """Turn off the lamp.
