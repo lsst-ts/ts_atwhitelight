@@ -769,12 +769,13 @@ class LampModel:
                 )
             except asyncio.TimeoutError:
                 self.log.warning(
-                    "Timeout waiting for lamp to power on. Attempt {i+1} of {self.max_retries}."
+                    f"Timeout waiting for lamp to power on. Attempt {i+1} of {self.max_retries}."
                 )
+                await asyncio.sleep(self.config.max_lamp_on_delay)
             else:
                 self.log.info("Lamp powered on.")
                 return
-        raise RuntimeError(f"Lamp did not powered on after {self.max_retries}.")
+        raise RuntimeError(f"Lamp did not powered on after {self.max_retries} times.")
 
     async def turn_lamp_off(self, force, wait, reason):
         """Turn the lamp off (if on). Fail if warming up, unless force=True.
