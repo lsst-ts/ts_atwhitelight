@@ -143,6 +143,7 @@ class LampModel:
         self.log = log.getChild("LampModel")
         self.make_connect_time_out = make_connect_time_out
         self.status_callback = status_callback
+        self.light_detected_event = asyncio.Event()
 
         # Set if connected to the labjack and state data seen,
         # cleared otherwise.
@@ -204,6 +205,7 @@ class LampModel:
         # Set by status_loop and cleared by move_shutter.
         self.shutter_open_event = asyncio.Event()
         self.shutter_closed_event = asyncio.Event()
+        self.max_retries = 3
 
     @property
     def connected(self):
@@ -442,6 +444,9 @@ class LampModel:
                     (True, True): ShutterState.INVALID,
                 }[(bool(data.shutter_closed), bool(data.shutter_open))]
                 light_detected = data.photosensor > self.config.photo_sensor_on_voltage
+                # If light is detected, we set the event.
+                if light_detected:
+                    self.light_detected_event.set()
                 await self.set_status(
                     controller_state=controller_state,
                     controller_error=controller_error,
@@ -535,7 +540,10 @@ class LampModel:
 
             if self.lamp_was_on:
                 if not light_detected:
-                    if current_tai - self.lamp_on_time > self.config.max_lamp_on_delay:
+                    if (
+                        current_tai - self.lamp_on_time
+                        > self.config.max_lamp_on_delay * self.max_retries
+                    ):
                         # The lamp never turned on or unexpectedly turned off;
                         # either way we don't want a cooldown timer.
                         basic_state = LampBasicState.UNEXPECTEDLY_OFF
@@ -551,6 +559,7 @@ class LampModel:
                     basic_state = LampBasicState.WARMUP
                 else:
                     basic_state = LampBasicState.ON
+                    self.light_detected_event.set()
             else:
                 if light_detected:
                     if (
@@ -748,12 +757,25 @@ class LampModel:
         self.abort_lamp_off_future("Superseded by a turnLampOn command")
         # Note: if the lamp is already on, then waiting is not strictly
         # necessary, but it only causes a very minor delay.
-        self.lamp_on_future = asyncio.Future()
-        await self._set_lamp_power(power)
-        await asyncio.wait_for(
-            self.lamp_on_future,
-            timeout=self.config.max_lamp_on_delay + ONOFF_COMMAND_TIMEOUT_MARGIN,
-        )
+        self.light_detected_event.clear()
+
+        for i in range(self.max_retries):
+            self.log.info(f"Powering on lamp, {i+1} of {self.max_retries} attempts.")
+            await self._set_lamp_power(power)
+            try:
+                await asyncio.wait_for(
+                    self.light_detected_event.wait(),
+                    timeout=self.config.max_lamp_on_delay,
+                )
+            except asyncio.TimeoutError:
+                self.log.warning(
+                    f"Timeout waiting for lamp to power on. Attempt {i+1} of {self.max_retries}."
+                )
+                await asyncio.sleep(self.config.max_lamp_on_delay)
+            else:
+                self.log.info("Lamp powered on.")
+                return
+        raise RuntimeError(f"Lamp did not powered on after {self.max_retries} times.")
 
     async def turn_lamp_off(self, force, wait, reason):
         """Turn the lamp off (if on). Fail if warming up, unless force=True.
@@ -798,6 +820,7 @@ class LampModel:
         self.lamp_unexpectedly_off = False
         self.abort_lamp_on_future(reason)
         self.lamp_off_future = asyncio.Future()
+        self.light_detected_event.clear()
         await self._set_lamp_power(0)
         if wait:
             await asyncio.wait_for(

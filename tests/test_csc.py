@@ -870,16 +870,17 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 controllerError=LampControllerError.NONE,
                 lightDetected=False,
             )
-            await self.assert_next_summary_state(state=salobj.State.FAULT)
-            # The CSC turns off turns off the lamp.
-            # The photo sensor sees no light so the basicState
-            # goes directly to COOLDOWN (with no TURNING_OFF phase).
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
                 basicState=LampBasicState.OFF,
                 controllerState=LampControllerState.COOLDOWN,
                 controllerError=LampControllerError.NONE,
+                lightDetected=False,
             )
+            # self.csc.lamp_model.labjack.allow_photosensor_on = True
+            # The CSC turns off turns off the lamp.
+            # The photo sensor sees no light so the basicState
+            # goes directly to COOLDOWN (with no TURNING_OFF phase).
 
     async def test_reconnect(self):
         async with self.make_csc(
@@ -1304,3 +1305,26 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                         f"{LampBasicState.OFF!r} or {LampBasicState.COOLDOWN!r}"
                     )
         self.fail("Bug: OFF state not seen. Increase max_basic_states?")
+
+    async def test_lamp_retry_if_fails_to_turn_on(self):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            self.csc.lamp_model.labjack.allow_photosensor_on = False
+            await self.remote.cmd_startChiller.start()
+            power_task = asyncio.create_task(
+                self.remote.cmd_turnLampOn.set_start(power=1000)
+            )
+            await asyncio.sleep(2)
+            self.csc.lamp_model.labjack.allow_photosensor_on = True
+            await power_task
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                flush=True,
+                basicState=LampBasicState.ON,
+                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerError=LampControllerError.NONE,
+                lightDetected=True,
+            )
