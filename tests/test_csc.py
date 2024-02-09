@@ -1307,11 +1307,24 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         self.fail("Bug: OFF state not seen. Increase max_basic_states?")
 
     async def test_lamp_retry_if_fails_to_turn_on(self):
-        async with self.make_csc(initial_state=salobj.State.ENABLED, config_dir=TEST_CONFIG_DIR, simulation_mode=1):
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
             self.csc.lamp_model.labjack.allow_photosensor_on = False
             await self.remote.cmd_startChiller.start()
-            power_task = asyncio.create_task(self.remote.cmd_turnLampOn.set_start(power=1000))
+            power_task = asyncio.create_task(
+                self.remote.cmd_turnLampOn.set_start(power=1000)
+            )
             await asyncio.sleep(2)
             self.csc.lamp_model.labjack.allow_photosensor_on = True
             await power_task
-            await self.assert_next_sample(topic=self.remote.evt_lampState, flush=True, basicState=LampBasicState.ON, controllerState=LampControllerState.STANDBY_OR_ON, controllerError=LampControllerError.NONE, lightDetected=True)
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                flush=True,
+                basicState=LampBasicState.ON,
+                controllerState=LampControllerState.STANDBY_OR_ON,
+                controllerError=LampControllerError.NONE,
+                lightDetected=True,
+            )
