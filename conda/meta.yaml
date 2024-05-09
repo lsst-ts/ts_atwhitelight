@@ -12,7 +12,7 @@ build:
 
 test:
   requires:
-    - ts-conda-build =0.3
+    - ts-conda-build =0.4
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
     - ts-tcpip
@@ -32,11 +32,10 @@ requirements:
     - pip
     - setuptools_scm
     - setuptools
-    - pytest-runner
   run:
     - python {{ python }}
     - numpy {{ numpy }}
     - setuptools {{ setuptools }}
     - setuptools_scm {{ setuptools_scm }}
     - ts-salobj
-    - ts-tcpip
+    - ts-tcpip >=1.2

@@ -6,6 +6,13 @@
 Version History
 ###############
 
+.. towncrier release notes start
+
+v0.3.2
+------
+
+* Support ts_tcpip 2.0 by removing writer and reader attribute calls and adding await to write calls.
+
 v0.3.1
 ------
 
