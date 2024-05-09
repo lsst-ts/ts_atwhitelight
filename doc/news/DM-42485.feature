@@ -1,1 +1,0 @@
-Add a retry loop for turning the lamp on.
