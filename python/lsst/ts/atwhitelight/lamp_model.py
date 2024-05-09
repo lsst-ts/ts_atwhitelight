@@ -206,6 +206,7 @@ class LampModel:
         self.shutter_open_event = asyncio.Event()
         self.shutter_closed_event = asyncio.Event()
         self.max_retries = 3
+        self.retry_sleep = 5
 
     @property
     def connected(self):
@@ -542,7 +543,7 @@ class LampModel:
                 if not light_detected:
                     if (
                         current_tai - self.lamp_on_time
-                        > self.config.max_lamp_on_delay * self.max_retries
+                        > self.config.max_lamp_on_delay * self.max_retries + (self.retry_sleep * self.max_retries)
                     ):
                         # The lamp never turned on or unexpectedly turned off;
                         # either way we don't want a cooldown timer.
@@ -771,7 +772,7 @@ class LampModel:
                 self.log.warning(
                     f"Timeout waiting for lamp to power on. Attempt {i+1} of {self.max_retries}."
                 )
-                await asyncio.sleep(self.config.max_lamp_on_delay)
+                await asyncio.sleep(self.retry_sleep)
             else:
                 self.log.info("Lamp powered on.")
                 return
