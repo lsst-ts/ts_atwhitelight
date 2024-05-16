@@ -29,3 +29,5 @@ lamp:
   max_lamp_off_delay: 2
   photo_sensor_on_voltage: 0.2
   shutter_timeout: 5
+  max_retries: 3
+  retry_sleep: 1
