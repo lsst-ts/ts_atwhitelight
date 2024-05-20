@@ -28,7 +28,7 @@ CONFIG_SCHEMA = yaml.safe_load(
 $schema: http://json-schema.org/draft-07/schema#
 $id: https://github.com/lsst-ts/ts_atwhitelight/blob/develop/python/lsst/ts/atwhitelight/config_schema.py
 # title must end with one or more spaces followed by the schema version, which must begin with "v"
-title: Whitelight v3
+title: Whitelight v4
 description: Schema for AT White Light configuration files
 type: object
 properties:
@@ -224,6 +224,14 @@ properties:
         description: Maximum time for a shutter move before giving up (seconds). Be generous.
         type: number
         exclusiveMinimum: 0
+      retry_sleep:
+        description: Amount of time to wait between a retry.
+        type: number
+        exclusiveMinimum: 0
+      max_retries:
+        description: Maximum number of retries to ignite bulb before going to fault state.
+        type: integer
+        minimum: 3
     required:
       - device_type
       - connection_type
@@ -236,6 +244,8 @@ properties:
       - max_lamp_off_delay
       - photo_sensor_on_voltage
       - shutter_timeout
+      - retry_sleep
+      - max_retries
     additionalProperties: false
 required:
   - chiller

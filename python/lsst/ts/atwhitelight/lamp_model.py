@@ -205,7 +205,6 @@ class LampModel:
         # Set by status_loop and cleared by move_shutter.
         self.shutter_open_event = asyncio.Event()
         self.shutter_closed_event = asyncio.Event()
-        self.max_retries = 3
 
     @property
     def connected(self):
@@ -542,7 +541,8 @@ class LampModel:
                 if not light_detected:
                     if (
                         current_tai - self.lamp_on_time
-                        > self.config.max_lamp_on_delay * self.max_retries
+                        > self.config.max_lamp_on_delay * self.config.max_retries
+                        + (self.config.retry_sleep * self.config.max_retries)
                     ):
                         # The lamp never turned on or unexpectedly turned off;
                         # either way we don't want a cooldown timer.
@@ -759,8 +759,10 @@ class LampModel:
         # necessary, but it only causes a very minor delay.
         self.light_detected_event.clear()
 
-        for i in range(self.max_retries):
-            self.log.info(f"Powering on lamp, {i+1} of {self.max_retries} attempts.")
+        for i in range(self.config.max_retries):
+            self.log.info(
+                f"Powering on lamp, {i+1} of {self.config.max_retries} attempts."
+            )
             await self._set_lamp_power(power)
             try:
                 await asyncio.wait_for(
@@ -769,13 +771,15 @@ class LampModel:
                 )
             except asyncio.TimeoutError:
                 self.log.warning(
-                    f"Timeout waiting for lamp to power on. Attempt {i+1} of {self.max_retries}."
+                    f"Timeout waiting for lamp to power on. Attempt {i+1} of {self.config.max_retries}."
                 )
-                await asyncio.sleep(self.config.max_lamp_on_delay)
+                await asyncio.sleep(self.retry_sleep)
             else:
                 self.log.info("Lamp powered on.")
                 return
-        raise RuntimeError(f"Lamp did not powered on after {self.max_retries} times.")
+        raise RuntimeError(
+            f"Lamp did not power on after {self.config.max_retries} times."
+        )
 
     async def turn_lamp_off(self, force, wait, reason):
         """Turn the lamp off (if on). Fail if warming up, unless force=True.
