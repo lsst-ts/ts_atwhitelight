@@ -1,1 +1,0 @@
-Add a retry_sleep attribute and add it to the boolean check for the unexpectedly off condition so that the CSC will not go to fault too early.
