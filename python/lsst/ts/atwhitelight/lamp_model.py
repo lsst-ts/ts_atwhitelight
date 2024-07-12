@@ -773,6 +773,7 @@ class LampModel:
                 self.log.warning(
                     f"Timeout waiting for lamp to power on. Attempt {i+1} of {self.config.max_retries}."
                 )
+                await self._set_lamp_power(0)
                 await asyncio.sleep(self.config.retry_sleep)
             else:
                 self.log.info("Lamp powered on.")
