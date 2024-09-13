@@ -865,14 +865,21 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
-                basicState=LampBasicState.UNEXPECTEDLY_OFF,
+                basicState=LampBasicState.COOLDOWN,
+                controllerState=LampControllerState.COOLDOWN,
+                controllerError=LampControllerError.NONE,
+                lightDetected=False,
+            )
+            await self.assert_next_sample(
+                topic=self.remote.evt_lampState,
+                basicState=LampBasicState.TURNING_ON,
                 controllerState=LampControllerState.STANDBY_OR_ON,
                 controllerError=LampControllerError.NONE,
                 lightDetected=False,
             )
             await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
-                basicState=LampBasicState.OFF,
+                basicState=LampBasicState.COOLDOWN,
                 controllerState=LampControllerState.COOLDOWN,
                 controllerError=LampControllerError.NONE,
                 lightDetected=False,
