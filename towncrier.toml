@@ -4,5 +4,4 @@ package = "lsst.ts.atwhitelight"
 package_dir = "python"
 filename = "doc/version-history.rst"
 name = "ts_atwhitelight"
-issue_format = "`{issue} <https://jira.lsstcorp.org/{issue}>`_"
-
+issue_format = "`{issue} <https://rubinobs.atlassian.net/{issue}>`_"
