@@ -1,1 +1,0 @@
-Set power to zero before retrying to light bulb.

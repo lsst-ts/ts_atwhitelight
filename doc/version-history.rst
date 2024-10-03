@@ -1,3 +1,12 @@
+ts_atwhitelight v0.5.1 (2024-10-03)
+===================================
+
+Bugfixes
+--------
+
+- Set power to zero before retrying to light bulb. (`DM-45227 <https://rubinobs.atlassian.net/DM-45227>`_)
+
+
 ts_atwhitelight v0.5.0 (2024-05-31)
 ===================================
 
