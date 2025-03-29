@@ -27,7 +27,7 @@ import inspect
 import math
 
 from lsst.ts import salobj, utils
-from lsst.ts.idl.enums.ATWhiteLight import ChillerControllerState
+from lsst.ts.xml.enums.ATWhiteLight import ChillerControllerState
 
 from .chiller_base import (
     ChillerControlSensor,

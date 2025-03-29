@@ -27,7 +27,7 @@ import enum
 import types
 
 from lsst.ts import salobj
-from lsst.ts.idl.enums.ATWhiteLight import (
+from lsst.ts.xml.enums.ATWhiteLight import (
     ChillerControllerState,
     LampBasicState,
     LampControllerError,

@@ -1,0 +1,1 @@
+Fixed conda recipe by switching to ts-xml from ts-idl.

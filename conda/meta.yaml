@@ -13,10 +13,8 @@ build:
 test:
   requires:
     - ts-conda-build =0.4
-    - ts-idl {{ idl_version }}
+    - ts-xml {{ xml_version }}
     - ts-salobj {{ salobj_version }}
-    - ts-tcpip
-    - labjack-ljm
   source_files:
     - python
     - bin
@@ -38,4 +36,6 @@ requirements:
     - setuptools {{ setuptools }}
     - setuptools_scm {{ setuptools_scm }}
     - ts-salobj
+    - ts-xml
+    - labjack-ljm
     - ts-tcpip >=1.2

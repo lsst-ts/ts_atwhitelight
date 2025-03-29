@@ -1,0 +1,1 @@
+Switched enum references to ts-xml from ts-idl in code.
