@@ -39,3 +39,4 @@ requirements:
     - ts-xml
     - labjack-ljm
     - ts-tcpip >=1.2
+    - libusb
