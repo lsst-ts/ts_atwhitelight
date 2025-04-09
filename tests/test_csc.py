@@ -28,14 +28,14 @@ import pytest
 from lsst.ts import atwhitelight, salobj
 from lsst.ts.atwhitelight import ErrorCode
 from lsst.ts.atwhitelight.chiller_model import READ_RETURN_TEMPERATURE
-from lsst.ts.idl.enums.ATWhiteLight import (
+from lsst.ts.utils import current_tai
+from lsst.ts.xml.enums.ATWhiteLight import (
     ChillerControllerState,
     LampBasicState,
     LampControllerError,
     LampControllerState,
     ShutterState,
 )
-from lsst.ts.utils import current_tai
 
 STD_TIMEOUT = 30  # standard command timeout (sec)
 TEST_CONFIG_DIR = pathlib.Path(__file__).parents[1].joinpath("tests", "data", "config")
@@ -1240,9 +1240,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 cooldownEndTime=previous_cooldownEndTime,
                 warmupEndTime=previous_warmupEndTime,
             )
-            data = await self.remote.evt_lampOnHours.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            data = await self.assert_next_sample(topic=self.remote.evt_lampOnHours)
             estimated_sec = (
                 self.csc.lamp_model.lamp_off_time - self.csc.lamp_model.lamp_on_time
             )

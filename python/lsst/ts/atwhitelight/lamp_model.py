@@ -25,7 +25,7 @@ import asyncio
 import inspect
 
 from lsst.ts import salobj, utils
-from lsst.ts.idl.enums.ATWhiteLight import (
+from lsst.ts.xml.enums.ATWhiteLight import (
     LampBasicState,
     LampControllerError,
     LampControllerState,

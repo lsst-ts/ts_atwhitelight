@@ -24,7 +24,7 @@ __all__ = ["MockLabJackInterface"]
 import asyncio
 
 from lsst.ts import utils
-from lsst.ts.idl.enums.ATWhiteLight import LampControllerError
+from lsst.ts.xml.enums.ATWhiteLight import LampControllerError
 
 from .labjack_interface import LabJackInterface
 from .lamp_base import (

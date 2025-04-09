@@ -25,7 +25,7 @@ import asyncio
 import functools
 
 from lsst.ts import tcpip, utils
-from lsst.ts.idl.enums.ATWhiteLight import ChillerControllerState
+from lsst.ts.xml.enums.ATWhiteLight import ChillerControllerState
 
 from .chiller_base import ChillerControlSensor, format_chiller_command_value
 from .chiller_client import ChillerClient
