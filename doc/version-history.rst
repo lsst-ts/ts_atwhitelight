@@ -1,3 +1,14 @@
+ts_atwhitelight v0.5.2 (2025-04-09)
+===================================
+
+Bugfixes
+--------
+
+- Switched enum references to ts-xml from ts-idl in code. (`DM-49653 <https://rubinobs.atlassian.net/DM-49653>`_)
+- Added libusb to runtime requirements. (`DM-49653 <https://rubinobs.atlassian.net/DM-49653>`_)
+- Fixed conda recipe by switching to ts-xml from ts-idl. (`DM-49653 <https://rubinobs.atlassian.net/DM-49653>`_)
+
+
 ts_atwhitelight v0.5.1 (2024-10-03)
 ===================================
 
