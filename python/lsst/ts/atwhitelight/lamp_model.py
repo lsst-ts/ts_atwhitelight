@@ -126,16 +126,11 @@ class LampModel:
         simulate=False,
         make_connect_time_out=False,
     ):
-        if status_callback is not None and not inspect.iscoroutinefunction(
-            status_callback
-        ):
-            raise TypeError(
-                f"status_callback={status_callback} must be None or a coroutine"
-            )
+        if status_callback is not None and not inspect.iscoroutinefunction(status_callback):
+            raise TypeError(f"status_callback={status_callback} must be None or a coroutine")
         if config.default_power < 800 or config.default_power > 1200:
             raise ValueError(
-                f"config.lamp.default_power={config.default_power} must be "
-                "in range [800, 1200], inclusive."
+                f"config.lamp.default_power={config.default_power} must be in range [800, 1200], inclusive."
             )
 
         self.config = config
@@ -288,9 +283,7 @@ class LampModel:
                 raise asyncio.TimeoutError(
                     "LampModel.connect timing out because make_connect_time_out is true"
                 )
-            await asyncio.wait_for(
-                self.basic_connect(), timeout=self.config.connect_timeout
-            )
+            await asyncio.wait_for(self.basic_connect(), timeout=self.config.connect_timeout)
         except Exception as e:
             self.log.exception(f"LampModel.connect failed: {e!r}")
             await self.call_status_callback()
@@ -318,9 +311,7 @@ class LampModel:
 
     async def basic_disconnect(self, cancel_status_loop):
         if self.connected:
-            await self.turn_lamp_off(
-                force=True, wait=False, reason="Disconnecting from the lamp controller"
-            )
+            await self.turn_lamp_off(force=True, wait=False, reason="Disconnecting from the lamp controller")
         # Paranoia; these futures should both be done.
         self.abort_lamp_on_future("Disconnecting from the lamp controller")
         self.abort_lamp_off_future("Disconnecting from the lamp controller")
@@ -358,17 +349,13 @@ class LampModel:
                             self.blinking_error_on_time = current_tai
                             if (
                                 self.blinking_error_gap_seen
-                                and current_tai - self.blinking_error_off_time
-                                > ERROR_BLINKING_DURATION
+                                and current_tai - self.blinking_error_off_time > ERROR_BLINKING_DURATION
                             ):
                                 self.log.debug("Blinking error signal has started")
                                 # Blinking error is starting to report a code
                                 self.error_code_start_time = current_tai
 
-                        if (
-                            self.status_event.is_set()
-                            and controller_error == LampControllerError.NONE
-                        ):
+                        if self.status_event.is_set() and controller_error == LampControllerError.NONE:
                             # This is a new error (otherwise we assume that the
                             # existing error code is still correct, until
                             # we finish counting blinks and know for sure).
@@ -395,17 +382,11 @@ class LampModel:
                                     # of seconds since the blinking began
                                     # plus 0.5 for the final blink's off time.
                                     float_code_duration = (
-                                        0.5
-                                        + self.blinking_error_off_time
-                                        - self.error_code_start_time
+                                        0.5 + self.blinking_error_off_time - self.error_code_start_time
                                     )
-                                    int_code_duration = int(
-                                        round(float_code_duration, 0)
-                                    )
+                                    int_code_duration = int(round(float_code_duration, 0))
                                     try:
-                                        controller_error = LampControllerError(
-                                            int_code_duration
-                                        )
+                                        controller_error = LampControllerError(int_code_duration)
                                     except ValueError:
                                         self.log.warning(
                                             f"Unrecognized error code duration: {int_code_duration}; "
@@ -562,10 +543,7 @@ class LampModel:
                     self.light_detected_event.set()
             else:
                 if light_detected:
-                    if (
-                        current_tai - self.lamp_off_time
-                        > self.config.max_lamp_off_delay
-                    ):
+                    if current_tai - self.lamp_off_time > self.config.max_lamp_off_delay:
                         # The lamp never turned off; we don't want a cooldown
                         # timer.
                         basic_state = LampBasicState.UNEXPECTEDLY_ON
@@ -585,18 +563,12 @@ class LampModel:
             controllerError=controller_error,
             controllerState=controller_state,
             lightDetected=light_detected,
-            cooldownEndTime=offset_timestamp(
-                self.lamp_off_time, self.config.cooldown_period
-            ),
-            warmupEndTime=offset_timestamp(
-                self.lamp_on_time, self.config.warmup_period
-            ),
+            cooldownEndTime=offset_timestamp(self.lamp_off_time, self.config.cooldown_period),
+            warmupEndTime=offset_timestamp(self.lamp_on_time, self.config.warmup_period),
             setPower=lamp_set_power,
         )
 
-        result2 = await self.csc.evt_lampConnected.set_write(
-            connected=self.labjack.connected
-        )
+        result2 = await self.csc.evt_lampConnected.set_write(connected=self.labjack.connected)
 
         # Handle the command futures after reporting the state,
         # in order to make a clearer sequence: ack the command after
@@ -688,24 +660,17 @@ class LampModel:
                 return
             if self.csc.evt_shutterState.data.actualState == ShutterState.INVALID:
                 raise salobj.ExpectedError(
-                    "One or both shutters sensing switches is broken; "
-                    "cannot move the shutter"
+                    "One or both shutters sensing switches is broken; cannot move the shutter"
                 )
-        shutter_event = (
-            self.shutter_open_event if do_open else self.shutter_closed_event
-        )
-        await self.labjack.write(
-            shutter_direction=SHUTTER_OPEN if do_open else SHUTTER_CLOSE
-        )
+        shutter_event = self.shutter_open_event if do_open else self.shutter_closed_event
+        await self.labjack.write(shutter_direction=SHUTTER_OPEN if do_open else SHUTTER_CLOSE)
         await self.labjack.write(shutter_enable=SHUTTER_ENABLE)
         await self.csc.evt_shutterState.set_write(
             commandedState=desired_state, enabled=True, force_output=True
         )
         shutter_event.clear()
         try:
-            await asyncio.wait_for(
-                shutter_event.wait(), timeout=self.config.shutter_timeout
-            )
+            await asyncio.wait_for(shutter_event.wait(), timeout=self.config.shutter_timeout)
         except asyncio.TimeoutError:
             movestr = "open" if do_open else "close"
             self.log.error(
@@ -718,9 +683,7 @@ class LampModel:
             await self.csc.evt_shutterState.set_write(enabled=False)
 
         if self.csc.evt_shutterState.data.actualState == ShutterState.INVALID:
-            raise salobj.ExpectedError(
-                "One or both shutters sensing switches is broken; move failed"
-            )
+            raise salobj.ExpectedError("One or both shutters sensing switches is broken; move failed")
 
     async def turn_lamp_on(self, power):
         """Turn the lamp on or change the power.
@@ -744,14 +707,10 @@ class LampModel:
             # because the new power may not match the old one.
             raise salobj.ExpectedError("Already turning the lamp on.")
         if power < MIN_POWER or power > MAX_POWER:
-            raise salobj.ExpectedError(
-                f"{power} must be in range [{MIN_POWER}, {MAX_POWER}], inclusive"
-            )
+            raise salobj.ExpectedError(f"{power} must be in range [{MIN_POWER}, {MAX_POWER}], inclusive")
         remaining_cooldown = self.get_remaining_cooldown()
         if remaining_cooldown > 0:
-            raise salobj.ExpectedError(
-                f"Cooling; wait {remaining_cooldown:0.1f} seconds."
-            )
+            raise salobj.ExpectedError(f"Cooling; wait {remaining_cooldown:0.1f} seconds.")
 
         self.lamp_unexpectedly_on = False
         self.abort_lamp_off_future("Superseded by a turnLampOn command")
@@ -760,9 +719,7 @@ class LampModel:
         self.light_detected_event.clear()
 
         for i in range(self.config.max_retries):
-            self.log.info(
-                f"Powering on lamp, {i+1} of {self.config.max_retries} attempts."
-            )
+            self.log.info(f"Powering on lamp, {i + 1} of {self.config.max_retries} attempts.")
             await self._set_lamp_power(power)
             try:
                 await asyncio.wait_for(
@@ -771,16 +728,14 @@ class LampModel:
                 )
             except asyncio.TimeoutError:
                 self.log.warning(
-                    f"Timeout waiting for lamp to power on. Attempt {i+1} of {self.config.max_retries}."
+                    f"Timeout waiting for lamp to power on. Attempt {i + 1} of {self.config.max_retries}."
                 )
                 await self._set_lamp_power(0)
                 await asyncio.sleep(self.config.retry_sleep)
             else:
                 self.log.info("Lamp powered on.")
                 return
-        raise RuntimeError(
-            f"Lamp did not power on after {self.config.max_retries} times."
-        )
+        raise RuntimeError(f"Lamp did not power on after {self.config.max_retries} times.")
 
     async def turn_lamp_off(self, force, wait, reason):
         """Turn the lamp off (if on). Fail if warming up, unless force=True.

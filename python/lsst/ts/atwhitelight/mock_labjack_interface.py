@@ -183,10 +183,7 @@ class MockLabJackInterface(LabJackInterface):
                 if self.lamp_set_voltage > 0:
                     self.lamp_off_time = utils.current_tai()
             else:
-                if (
-                    lamp_set_voltage < VOLTS_AT_MIN_POWER
-                    or lamp_set_voltage > VOLTS_AT_MAX_POWER
-                ):
+                if lamp_set_voltage < VOLTS_AT_MIN_POWER or lamp_set_voltage > VOLTS_AT_MAX_POWER:
                     raise RuntimeError(
                         f"Invalid lamp_set_voltage={lamp_set_voltage} must be 0 or in range "
                         f"[{VOLTS_AT_MIN_POWER}, {VOLTS_AT_MAX_POWER}] V"
@@ -197,17 +194,13 @@ class MockLabJackInterface(LabJackInterface):
 
         shutter_direction = kwargs.get("shutter_direction")
         if shutter_direction is not None:
-            self.do_open_shutter = {SHUTTER_OPEN: True, SHUTTER_CLOSE: False}[
-                shutter_direction
-            ]
+            self.do_open_shutter = {SHUTTER_OPEN: True, SHUTTER_CLOSE: False}[shutter_direction]
 
         shutter_enable = kwargs.get("shutter_enable")
         if shutter_enable is not None:
             self.move_shutter_task.cancel()
             self.shutter_enabled = shutter_enable
-            do_enable_shutter = {SHUTTER_ENABLE: True, SHUTTER_DISABLE: False}[
-                shutter_enable
-            ]
+            do_enable_shutter = {SHUTTER_ENABLE: True, SHUTTER_DISABLE: False}[shutter_enable]
             if do_enable_shutter:
                 self.move_shutter_task = asyncio.create_task(self.move_shutter())
 

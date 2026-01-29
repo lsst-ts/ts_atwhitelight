@@ -3,8 +3,9 @@
 This configuration only affects single-package Sphinx documenation builds.
 """
 
-import lsst.ts.atwhitelight  # noqa: F401
 from documenteer.conf.pipelinespkg import *  # type: ignore # noqa: F403
+
+import lsst.ts.atwhitelight  # noqa: F401
 
 project = "ts_atwhitelight"
 html_theme_options["logotext"] = project  # type: ignore # noqa: F405

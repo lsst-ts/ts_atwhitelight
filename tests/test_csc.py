@@ -25,6 +25,7 @@ import pathlib
 import unittest
 
 import pytest
+
 from lsst.ts import atwhitelight, salobj
 from lsst.ts.atwhitelight import ErrorCode
 from lsst.ts.atwhitelight.chiller_model import READ_RETURN_TEMPERATURE
@@ -90,18 +91,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             simulation_mode=1,
         ):
             await self.assert_next_summary_state(state=salobj.State.DISABLED)
-            await self.assert_next_sample(
-                topic=self.remote.evt_chillerConnected, connected=False
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampConnected, connected=False
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_chillerConnected, connected=True
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampConnected, connected=True
-            )
+            await self.assert_next_sample(topic=self.remote.evt_chillerConnected, connected=False)
+            await self.assert_next_sample(topic=self.remote.evt_lampConnected, connected=False)
+            await self.assert_next_sample(topic=self.remote.evt_chillerConnected, connected=True)
+            await self.assert_next_sample(topic=self.remote.evt_lampConnected, connected=True)
             await self.assert_next_sample(
                 topic=self.remote.evt_chillerWatchdog,
                 controllerState=ChillerControllerState.STANDBY,
@@ -428,21 +421,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             simulation_mode=1,
         ):
             mock_chiller = self.csc.chiller_model.mock_chiller
-            data = await self.remote.tel_chillerFanSpeeds.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            data = await self.remote.tel_chillerFanSpeeds.next(flush=False, timeout=STD_TIMEOUT)
             for i in range(4):
-                salname = f"fan{i+1}"
+                salname = f"fan{i + 1}"
                 # The chiller reports fan speeds rounded to the nearest int
-                assert getattr(data, salname) == pytest.approx(
-                    mock_chiller.fan_speeds[i], abs=0.5
-                )
-            data = await self.remote.tel_chillerTemperatures.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
-            assert data.setTemperature == pytest.approx(
-                self.csc.config.chiller.initial_temperature
-            )
+                assert getattr(data, salname) == pytest.approx(mock_chiller.fan_speeds[i], abs=0.5)
+            data = await self.remote.tel_chillerTemperatures.next(flush=False, timeout=STD_TIMEOUT)
+            assert data.setTemperature == pytest.approx(self.csc.config.chiller.initial_temperature)
             for salname, attrname in (
                 ("ambientTemperature", "ambient_temperature"),
                 ("returnTemperature", "return_temperature"),
@@ -456,22 +441,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                         assert getattr(data, salname) == pytest.approx(
                             getattr(mock_chiller, attrname), abs=0.05
                         )
-            data = await self.remote.tel_chillerCoolantFlow.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            data = await self.remote.tel_chillerCoolantFlow.next(flush=False, timeout=STD_TIMEOUT)
             # The chiller reports flow rounded to 1/10
             assert data.flow == pytest.approx(mock_chiller.coolant_flow_rate, abs=0.05)
-            data = await self.remote.tel_chillerTECBankCurrents.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            data = await self.remote.tel_chillerTECBankCurrents.next(flush=False, timeout=STD_TIMEOUT)
             for i in range(2):
-                salname = f"bank{i+1}"
-                assert getattr(data, salname) == pytest.approx(
-                    mock_chiller.tec_bank_currents[i], abs=0.0005
-                )
-            data = await self.remote.tel_chillerTECDrive.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+                salname = f"bank{i + 1}"
+                assert getattr(data, salname) == pytest.approx(mock_chiller.tec_bank_currents[i], abs=0.0005)
+            data = await self.remote.tel_chillerTECDrive.next(flush=False, timeout=STD_TIMEOUT)
             assert data.isCooling == mock_chiller.is_cooling
             assert data.level == pytest.approx(mock_chiller.tec_drive_level, abs=0.5)
 
@@ -540,10 +517,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 lightDetected=False,
             )
             await asyncio.sleep(too_large_error_code + 1)
-            assert (
-                self.csc.evt_lampState.data.controllerError
-                == LampControllerError.UNKNOWN
-            )
+            assert self.csc.evt_lampState.data.controllerError == LampControllerError.UNKNOWN
 
     async def test_lamp_connect_timeout(self):
         """Test that we cannot connect to the lamp in time."""
@@ -744,9 +718,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 setPower=0,
                 warmupEndTime=previous_warmup_end_time,
             )
-            assert (
-                data.cooldownEndTime >= start_tai + self.csc.config.lamp.cooldown_period
-            )
+            assert data.cooldownEndTime >= start_tai + self.csc.config.lamp.cooldown_period
             assert self.csc.chiller_connected
             assert self.csc.lamp_connected
             await self.check_fault_to_standby_while_cooling(can_recover=False)
@@ -896,39 +868,23 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             simulation_mode=1,
         ):
             await self.assert_next_summary_state(state=salobj.State.STANDBY)
-            await self.assert_next_sample(
-                topic=self.remote.evt_chillerConnected, connected=False
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampConnected, connected=False
-            )
+            await self.assert_next_sample(topic=self.remote.evt_chillerConnected, connected=False)
+            await self.assert_next_sample(topic=self.remote.evt_lampConnected, connected=False)
 
             await self.remote.cmd_start.start()
             await self.assert_next_summary_state(state=salobj.State.DISABLED)
-            await self.assert_next_sample(
-                topic=self.remote.evt_chillerConnected, connected=True
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampConnected, connected=True
-            )
+            await self.assert_next_sample(topic=self.remote.evt_chillerConnected, connected=True)
+            await self.assert_next_sample(topic=self.remote.evt_lampConnected, connected=True)
 
             await self.remote.cmd_standby.start()
             await self.assert_next_summary_state(state=salobj.State.STANDBY)
-            await self.assert_next_sample(
-                topic=self.remote.evt_chillerConnected, connected=False
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampConnected, connected=False
-            )
+            await self.assert_next_sample(topic=self.remote.evt_chillerConnected, connected=False)
+            await self.assert_next_sample(topic=self.remote.evt_lampConnected, connected=False)
 
             await self.remote.cmd_start.start()
             await self.assert_next_summary_state(state=salobj.State.DISABLED)
-            await self.assert_next_sample(
-                topic=self.remote.evt_chillerConnected, connected=True
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampConnected, connected=True
-            )
+            await self.assert_next_sample(topic=self.remote.evt_chillerConnected, connected=True)
+            await self.assert_next_sample(topic=self.remote.evt_lampConnected, connected=True)
 
     async def test_set_chiller_temperature(self):
         async with self.make_csc(
@@ -939,16 +895,11 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             # Check the control sensor (which must be SUPPLY for our
             # current chiller).
             assert (
-                self.csc.chiller_model.mock_chiller.control_sensor
-                == atwhitelight.ChillerControlSensor.SUPPLY
+                self.csc.chiller_model.mock_chiller.control_sensor == atwhitelight.ChillerControlSensor.SUPPLY
             )
 
-            data = await self.remote.tel_chillerTemperatures.next(
-                flush=True, timeout=STD_TIMEOUT
-            )
-            assert data.setTemperature == pytest.approx(
-                self.csc.config.chiller.initial_temperature, abs=0.05
-            )
+            data = await self.remote.tel_chillerTemperatures.next(flush=True, timeout=STD_TIMEOUT)
+            assert data.setTemperature == pytest.approx(self.csc.config.chiller.initial_temperature, abs=0.05)
 
             # Values will be rounded to the nearest 1/10 C,
             # so specify target values that are already rounded
@@ -957,9 +908,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 await self.remote.cmd_setChillerTemperature.set_start(
                     temperature=target_temp, timeout=STD_TIMEOUT
                 )
-                data = await self.remote.tel_chillerTemperatures.next(
-                    flush=True, timeout=STD_TIMEOUT
-                )
+                data = await self.remote.tel_chillerTemperatures.next(flush=True, timeout=STD_TIMEOUT)
                 assert data.setTemperature == pytest.approx(target_temp)
 
             # A value out of range of configured
@@ -1047,9 +996,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             )
 
             # Timeout
-            self.csc.lamp_model.labjack.shutter_duration = (
-                self.csc.config.lamp.shutter_timeout * 2
-            )
+            self.csc.lamp_model.labjack.shutter_duration = self.csc.config.lamp.shutter_timeout * 2
             open_task = asyncio.create_task(self.remote.cmd_openShutter.start())
             await self.assert_next_sample(
                 topic=self.remote.evt_shutterState,
@@ -1109,18 +1056,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            await self.assert_next_sample(
-                topic=self.remote.evt_chillerConnected, connected=False
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampConnected, connected=False
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_chillerConnected, connected=True
-            )
-            await self.assert_next_sample(
-                topic=self.remote.evt_lampConnected, connected=True
-            )
+            await self.assert_next_sample(topic=self.remote.evt_chillerConnected, connected=False)
+            await self.assert_next_sample(topic=self.remote.evt_lampConnected, connected=False)
+            await self.assert_next_sample(topic=self.remote.evt_chillerConnected, connected=True)
+            await self.assert_next_sample(topic=self.remote.evt_lampConnected, connected=True)
             await self.assert_next_sample(
                 topic=self.remote.evt_chillerWatchdog,
                 controllerState=ChillerControllerState.STANDBY,
@@ -1226,9 +1165,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 setPower=0,
                 warmupEndTime=previous_warmupEndTime,
             )
-            assert (
-                data.cooldownEndTime >= start_tai + self.csc.config.lamp.cooldown_period
-            )
+            assert data.cooldownEndTime >= start_tai + self.csc.config.lamp.cooldown_period
             previous_cooldownEndTime = data.cooldownEndTime
             data = await self.assert_next_sample(
                 topic=self.remote.evt_lampState,
@@ -1241,9 +1178,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 warmupEndTime=previous_warmupEndTime,
             )
             data = await self.assert_next_sample(topic=self.remote.evt_lampOnHours)
-            estimated_sec = (
-                self.csc.lamp_model.lamp_off_time - self.csc.lamp_model.lamp_on_time
-            )
+            estimated_sec = self.csc.lamp_model.lamp_off_time - self.csc.lamp_model.lamp_on_time
             assert estimated_sec > 0
             assert data.hours == pytest.approx(estimated_sec / 3600)
 
@@ -1296,9 +1231,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         # then the CSC's timer. But the lamp controller's cooldown timer
         # is irrelevant if the lamp controller is in an error state.
         for _ in range(max_basic_states):
-            data = await self.remote.evt_lampState.next(
-                flush=False, timeout=STD_TIMEOUT + remaining_cooldown
-            )
+            data = await self.remote.evt_lampState.next(flush=False, timeout=STD_TIMEOUT + remaining_cooldown)
             match data.basicState:
                 case LampBasicState.OFF:
                     return
@@ -1319,9 +1252,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         ):
             self.csc.lamp_model.labjack.allow_photosensor_on = False
             await self.remote.cmd_startChiller.start()
-            power_task = asyncio.create_task(
-                self.remote.cmd_turnLampOn.set_start(power=1000)
-            )
+            power_task = asyncio.create_task(self.remote.cmd_turnLampOn.set_start(power=1000))
             await asyncio.sleep(2)
             self.csc.lamp_model.labjack.allow_photosensor_on = True
             await power_task
