@@ -122,8 +122,7 @@ def power_from_voltage(voltage, atol=0.1):
         return 0
     if not VOLTS_AT_MIN_POWER - atol <= voltage <= VOLTS_AT_MAX_POWER + atol:
         raise salobj.ExpectedError(
-            f"{voltage=} not in range "
-            f"[{VOLTS_AT_MIN_POWER - atol=}, {VOLTS_AT_MAX_POWER + atol}]"
+            f"{voltage=} not in range [{VOLTS_AT_MIN_POWER - atol=}, {VOLTS_AT_MAX_POWER + atol}]"
         )
     return (voltage - VOLTS_AT_MIN_POWER) / VOLTS_PER_WATT + MIN_POWER
 
@@ -155,7 +154,5 @@ def voltage_from_power(power):
         return 0
 
     if power < MIN_POWER or power > MAX_POWER:
-        raise salobj.ExpectedError(
-            f"{power} must be in range [{MIN_POWER}, {MAX_POWER}], inclusive"
-        )
+        raise salobj.ExpectedError(f"{power} must be in range [{MIN_POWER}, {MAX_POWER}], inclusive")
     return (power - MIN_POWER) * VOLTS_PER_WATT + VOLTS_AT_MIN_POWER

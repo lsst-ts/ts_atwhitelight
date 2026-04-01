@@ -112,12 +112,8 @@ class ChillerModel:
         simulate,
         make_connect_time_out=False,
     ):
-        if status_callback is not None and not inspect.iscoroutinefunction(
-            status_callback
-        ):
-            raise TypeError(
-                f"status_callback={status_callback} must be None or a coroutine"
-            )
+        if status_callback is not None and not inspect.iscoroutinefunction(status_callback):
+            raise TypeError(f"status_callback={status_callback} must be None or a coroutine")
 
         self.config = config
         self.csc = csc
@@ -136,25 +132,13 @@ class ChillerModel:
 
         self.reply_handlers = {
             "01": self.handle_watchdog,
-            "03": functools.partial(
-                self.handle_read_temperature, field_name="setTemperature"
-            ),
-            "04": functools.partial(
-                self.handle_read_temperature, field_name="supplyTemperature"
-            ),
-            "07": functools.partial(
-                self.handle_read_temperature, field_name="returnTemperature"
-            ),
-            "08": functools.partial(
-                self.handle_read_temperature, field_name="ambientTemperature"
-            ),
+            "03": functools.partial(self.handle_read_temperature, field_name="setTemperature"),
+            "04": functools.partial(self.handle_read_temperature, field_name="supplyTemperature"),
+            "07": functools.partial(self.handle_read_temperature, field_name="returnTemperature"),
+            "08": functools.partial(self.handle_read_temperature, field_name="ambientTemperature"),
             "09": self.handle_read_coolant_flow_rate,
-            "10": functools.partial(
-                self.handle_read_tec_bank_currents, field_name="bank1"
-            ),
-            "11": functools.partial(
-                self.handle_read_tec_bank_currents, field_name="bank2"
-            ),
+            "10": functools.partial(self.handle_read_tec_bank_currents, field_name="bank1"),
+            "11": functools.partial(self.handle_read_tec_bank_currents, field_name="bank2"),
             "13": self.handle_read_tec_drive_level,
             "15": self.handle_set_chiller_status,
             "16": self.handle_set_control_sensor,
@@ -242,9 +226,7 @@ class ChillerModel:
                 raise asyncio.TimeoutError(
                     "ChillerModel.connect timing out because make_connect_time_out is true"
                 )
-            await asyncio.wait_for(
-                self.client.start_task, timeout=self.config.connect_timeout
-            )
+            await asyncio.wait_for(self.client.start_task, timeout=self.config.connect_timeout)
             await self.csc.evt_chillerConnected.set_write(connected=True)
             self.log.debug("Connected; configure chiller")
             await self.configure_chiller()
@@ -398,9 +380,7 @@ class ChillerModel:
             * Flow is in liters/minute and must be positive.
         """
         if threshold_type == ChillerThresholdType.LowCoolantFlowRate and value <= 0:
-            raise ValueError(
-                f"value={value} must be positive for threshold_type={threshold_type!r}"
-            )
+            raise ValueError(f"value={value} must be positive for threshold_type={threshold_type!r}")
 
         cmd_str = {
             ChillerThresholdType.HighSupplyTemperature: "26sHiSpTAl",
@@ -412,9 +392,7 @@ class ChillerModel:
         if cmd_str is None:
             raise ValueError(f"Unsupported threshold_type={threshold_type!r}")
 
-        formatted_value = format_chiller_command_value(
-            value, scale=10, nchar=5, signed=True
-        )
+        formatted_value = format_chiller_command_value(value, scale=10, nchar=5, signed=True)
 
         await self.run_command(cmd_str + formatted_value)
 
@@ -468,9 +446,7 @@ class ChillerModel:
             * Flow is in liters/minute and must be positive.
         """
         if threshold_type == ChillerThresholdType.LowCoolantFlowRate and value <= 0:
-            raise ValueError(
-                f"value={value} must be positive for threshold_type={threshold_type!r}"
-            )
+            raise ValueError(f"value={value} must be positive for threshold_type={threshold_type!r}")
 
         cmd_str = {
             ChillerThresholdType.HighSupplyTemperature: "21sHiSpTWn",
@@ -482,9 +458,7 @@ class ChillerModel:
         if cmd_str is None:
             raise ValueError(f"Unsupported threshold_type={threshold_type!r}")
 
-        formatted_value = format_chiller_command_value(
-            value, scale=10, nchar=5, signed=True
-        )
+        formatted_value = format_chiller_command_value(value, scale=10, nchar=5, signed=True)
 
         await self.run_command(cmd_str + formatted_value)
 
@@ -502,10 +476,7 @@ class ChillerModel:
         """
         if not self.connected:
             raise RuntimeError("Not connected")
-        if (
-            not self.configured_event.is_set()
-            or not self.csc.evt_chillerWatchdog.has_data
-        ):
+        if not self.configured_event.is_set() or not self.csc.evt_chillerWatchdog.has_data:
             raise RuntimeError("Bug: connected but watchdog data not available")
         return self.csc.evt_chillerWatchdog.data
 
@@ -557,10 +528,7 @@ class ChillerModel:
 
     async def handle_read_fan_speed(self, data, fan_num):
         if fan_num not in FAN_NUMBERS:
-            self.log.warning(
-                "Cannot parse fan speed reply: "
-                f"fan_num={fan_num} must be one of {FAN_NUMBERS}"
-            )
+            self.log.warning(f"Cannot parse fan speed reply: fan_num={fan_num} must be one of {FAN_NUMBERS}")
         field_name = f"fan{fan_num}"
         speed = float(data)
         self.csc.tel_chillerFanSpeeds.set(**{field_name: speed})
@@ -657,9 +625,7 @@ class ChillerModel:
             alarms_present = parse_bool_str(data[2])
             warnings_present = parse_bool_str(data[3])
         except Exception:
-            self.log.exception(
-                f"Could not parse watchdog data: {data!r}; assuming the worst"
-            )
+            self.log.exception(f"Could not parse watchdog data: {data!r}; assuming the worst")
             controller_state = ChillerControllerState.UNKNOWN
             pump_running = False
             alarms_present = True
@@ -703,42 +669,60 @@ class ChillerModel:
         await self.do_set_control_temperature(
             temperature=self.csc.tel_chillerTemperatures.data.setTemperature
         )
-        await self.do_set_alarm_threshold(
-            threshold_type=ChillerThresholdType.HighSupplyTemperature,
-            value=self.config.high_supply_temperature_alarm,
-        ),
-        await self.do_set_alarm_threshold(
-            threshold_type=ChillerThresholdType.LowSupplyTemperature,
-            value=self.config.low_supply_temperature_alarm,
-        ),
-        await self.do_set_alarm_threshold(
-            threshold_type=ChillerThresholdType.HighAmbientTemperature,
-            value=self.config.high_ambient_temperature_alarm,
-        ),
-        await self.do_set_alarm_threshold(
-            threshold_type=ChillerThresholdType.LowAmbientTemperature,
-            value=self.config.low_ambient_temperature_alarm,
-        ),
-        await self.do_set_alarm_threshold(
-            threshold_type=ChillerThresholdType.LowCoolantFlowRate,
-            value=self.config.low_coolant_flow_rate_alarm,
-        ),
-        await self.do_set_warning_threshold(
-            threshold_type=ChillerThresholdType.HighSupplyTemperature,
-            value=self.config.high_supply_temperature_warning,
-        ),
-        await self.do_set_warning_threshold(
-            threshold_type=ChillerThresholdType.LowSupplyTemperature,
-            value=self.config.low_supply_temperature_warning,
-        ),
-        await self.do_set_warning_threshold(
-            threshold_type=ChillerThresholdType.HighAmbientTemperature,
-            value=self.config.high_ambient_temperature_warning,
-        ),
-        await self.do_set_warning_threshold(
-            threshold_type=ChillerThresholdType.LowAmbientTemperature,
-            value=self.config.low_ambient_temperature_warning,
-        ),
+        (
+            await self.do_set_alarm_threshold(
+                threshold_type=ChillerThresholdType.HighSupplyTemperature,
+                value=self.config.high_supply_temperature_alarm,
+            ),
+        )
+        (
+            await self.do_set_alarm_threshold(
+                threshold_type=ChillerThresholdType.LowSupplyTemperature,
+                value=self.config.low_supply_temperature_alarm,
+            ),
+        )
+        (
+            await self.do_set_alarm_threshold(
+                threshold_type=ChillerThresholdType.HighAmbientTemperature,
+                value=self.config.high_ambient_temperature_alarm,
+            ),
+        )
+        (
+            await self.do_set_alarm_threshold(
+                threshold_type=ChillerThresholdType.LowAmbientTemperature,
+                value=self.config.low_ambient_temperature_alarm,
+            ),
+        )
+        (
+            await self.do_set_alarm_threshold(
+                threshold_type=ChillerThresholdType.LowCoolantFlowRate,
+                value=self.config.low_coolant_flow_rate_alarm,
+            ),
+        )
+        (
+            await self.do_set_warning_threshold(
+                threshold_type=ChillerThresholdType.HighSupplyTemperature,
+                value=self.config.high_supply_temperature_warning,
+            ),
+        )
+        (
+            await self.do_set_warning_threshold(
+                threshold_type=ChillerThresholdType.LowSupplyTemperature,
+                value=self.config.low_supply_temperature_warning,
+            ),
+        )
+        (
+            await self.do_set_warning_threshold(
+                threshold_type=ChillerThresholdType.HighAmbientTemperature,
+                value=self.config.high_ambient_temperature_warning,
+            ),
+        )
+        (
+            await self.do_set_warning_threshold(
+                threshold_type=ChillerThresholdType.LowAmbientTemperature,
+                value=self.config.low_ambient_temperature_warning,
+            ),
+        )
         await self.do_set_warning_threshold(
             threshold_type=ChillerThresholdType.LowCoolantFlowRate,
             value=self.config.low_coolant_flow_rate_warning,
@@ -798,9 +782,7 @@ class ChillerModel:
         if not self.connected:
             raise ConnectedError("Not connected")
 
-        reply = await asyncio.wait_for(
-            self.client.run_command(cmd), timeout=self.config.command_timeout
-        )
+        reply = await asyncio.wait_for(self.client.run_command(cmd), timeout=self.config.command_timeout)
 
         if len(reply) < 14:
             err_msg = f"Command {cmd} failed: reply={reply!r}"

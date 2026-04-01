@@ -141,18 +141,12 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
         config = copy.copy(config)
         config.chiller = types.SimpleNamespace(**config.chiller)
         config.lamp = types.SimpleNamespace(**config.lamp)
-        if (
-            config.chiller.initial_temperature
-            < config.chiller.low_supply_temperature_warning
-        ):
+        if config.chiller.initial_temperature < config.chiller.low_supply_temperature_warning:
             raise salobj.ExpectedError(
                 f"config.chiller.initial_temperature={config.chiller.initial_temperature} "
                 f"< low_supply_temperature_warning={config.chiller.low_supply_temperature_warning}"
             )
-        if (
-            config.chiller.initial_temperature
-            > config.chiller.high_supply_temperature_warning
-        ):
+        if config.chiller.initial_temperature > config.chiller.high_supply_temperature_warning:
             raise salobj.ExpectedError(
                 f"config.chiller.initial_temperature={config.chiller.initial_temperature} "
                 f"> high_supply_temperature_warning={config.chiller.high_supply_temperature_warning}"
@@ -198,9 +192,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
                             force=True, wait=False, reason="CSC is going to FAULT state"
                         )
                     except Exception as e:
-                        self.log.error(
-                            f"Failed to turn lamp off; please turn it off manually: {e!r}"
-                        )
+                        self.log.error(f"Failed to turn lamp off; please turn it off manually: {e!r}")
                 else:
                     self.log.warning(
                         "Going to fault and not connect to the lamp controller; "
@@ -241,9 +233,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
                 simulate=self.simulation_mode != 0,
                 make_connect_time_out=self.chiller_make_connect_time_out,
             )
-        await asyncio.wait_for(
-            self.chiller_model.connect(), timeout=self.config.chiller.connect_timeout
-        )
+        await asyncio.wait_for(self.chiller_model.connect(), timeout=self.config.chiller.connect_timeout)
 
     async def connect_lamp(self):
         """Connect to the lamp controller LabJack and get status.
@@ -263,9 +253,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
                 simulate=self.simulation_mode != 0,
                 make_connect_time_out=self.lamp_make_connect_time_out,
             )
-        await asyncio.wait_for(
-            self.lamp_model.connect(), timeout=self.config.lamp.connect_timeout
-        )
+        await asyncio.wait_for(self.lamp_model.connect(), timeout=self.config.lamp.connect_timeout)
 
     async def disconnect_chiller(self):
         try:
@@ -299,15 +287,11 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             if self.lamp_connected:
                 lamp_state = self.lamp_model.get_state()
                 if lamp_state.controllerError != LampControllerError.NONE:
-                    raise salobj.ExpectedError(
-                        f"Lamp controller error code={lamp_state.controllerError!r}"
-                    )
+                    raise salobj.ExpectedError(f"Lamp controller error code={lamp_state.controllerError!r}")
             if self.chiller_connected:
                 chiller_watchdog = self.chiller_model.get_watchdog()
                 if chiller_watchdog.alarmsPresent:
-                    raise RuntimeError(
-                        "Can't go to standby: chiller is reporting one or more alarms"
-                    )
+                    raise RuntimeError("Can't go to standby: chiller is reporting one or more alarms")
         if self.lamp_connected:
             remaining_cooldown = self.lamp_model.get_remaining_cooldown()
             if remaining_cooldown > 0:
@@ -348,9 +332,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
         self.assert_enabled()
         if not self.lamp_connected:
             raise salobj.ExpectedError("Lamp not connected")
-        await self.cmd_openShutter.ack_in_progress(
-            data=data, timeout=self.config.lamp.shutter_timeout
-        )
+        await self.cmd_openShutter.ack_in_progress(data=data, timeout=self.config.lamp.shutter_timeout)
         await self.lamp_model.move_shutter(do_open=False)
 
     async def do_openShutter(self, data):
@@ -364,9 +346,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
         self.assert_enabled()
         if not self.lamp_connected:
             raise salobj.ExpectedError("Lamp not connected")
-        await self.cmd_openShutter.ack_in_progress(
-            data=data, timeout=self.config.lamp.shutter_timeout
-        )
+        await self.cmd_openShutter.ack_in_progress(data=data, timeout=self.config.lamp.shutter_timeout)
         await self.lamp_model.move_shutter(do_open=True)
 
     async def do_turnLampOn(self, data):
@@ -484,8 +464,7 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
             remaining = self.lamp_model.get_remaining_cooldown()
             if remaining > 0:
                 raise salobj.ExpectedError(
-                    "Lamp is cooling down; "
-                    f"you can't stop the chiller for {remaining:0.2f} seconds"
+                    f"Lamp is cooling down; you can't stop the chiller for {remaining:0.2f} seconds"
                 )
         await self.chiller_model.stop_cooling()
 
@@ -541,17 +520,14 @@ class ATWhiteLightCsc(salobj.ConfigurableCsc):
 
         chiller_watchdog = self.chiller_model.get_watchdog()
         if chiller_watchdog.alarmsPresent:
-            return await self.fault(
-                code=ErrorCode.CHILLER_ERROR, report="Chiller reporting alarms"
-            )
+            return await self.fault(code=ErrorCode.CHILLER_ERROR, report="Chiller reporting alarms")
 
         # Fault if the lamp is on and the chiller is not chilling
         if self.lamp_model.lamp_was_on:
             if chiller_watchdog.controllerState != ChillerControllerState.RUN:
                 return await self.fault(
                     code=ErrorCode.NOT_CHILLING_WITH_LAMP_ON,
-                    report="Chiller is not running; "
-                    f"controller state={chiller_watchdog.controllerState!r}",
+                    report=f"Chiller is not running; controller state={chiller_watchdog.controllerState!r}",
                 )
             if not chiller_watchdog.pumpRunning:
                 return await self.fault(

@@ -82,9 +82,7 @@ def format_chiller_command_value(value, scale, nchar, signed):
     if not signed and value < 0:
         raise ValueError(f"value={value} < 0 but signed=False")
     sign_char = "+" if signed else ""
-    formatted_value = f"{value*scale:{sign_char}0{nchar}.0f}"
+    formatted_value = f"{value * scale:{sign_char}0{nchar}.0f}"
     if len(formatted_value) > nchar:
-        raise ValueError(
-            f"value={value} out of range with scale={scale}, nchar={nchar}"
-        )
+        raise ValueError(f"value={value} out of range with scale={scale}, nchar={nchar}")
     return formatted_value

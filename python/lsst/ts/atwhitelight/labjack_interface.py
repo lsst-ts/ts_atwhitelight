@@ -103,9 +103,7 @@ class LabJackInterface:
             f"config.connection_type={self.connection_type}"
         )
         try:
-            await self._run_in_thread(
-                func=self._blocking_connect, timeout=CONNECT_TIMEOUT
-            )
+            await self._run_in_thread(func=self._blocking_connect, timeout=CONNECT_TIMEOUT)
         except Exception as e:
             self.log.error(f"Could not connect to LabJack: {e!r}")
             raise
@@ -113,9 +111,7 @@ class LabJackInterface:
     async def disconnect(self):
         """Disconnect from the LabJack. A no-op if disconnected."""
         try:
-            await self._run_in_thread(
-                func=self._blocking_disconnect, timeout=CONNECT_TIMEOUT
-            )
+            await self._run_in_thread(func=self._blocking_disconnect, timeout=CONNECT_TIMEOUT)
         finally:
             self.handle = None
 
@@ -135,18 +131,13 @@ class LabJackInterface:
                 timeout=READ_WRITE_TIMEOUT,
             )
         except Exception as e:
-            self.log.error(
-                f"Read channels={channels!r} from LabJack handle={self.handle!r} "
-                f"failed: {e!r}"
-            )
+            self.log.error(f"Read channels={channels!r} from LabJack handle={self.handle!r} failed: {e!r}")
             raise
         if len(values) != len(LabJackChannels.read):
             raise RuntimeError(
                 f"The number of read values {values} does not match the number of channels {channels}"
             )
-        channel_dict = {
-            label: value for label, value in zip(LabJackChannels.read.keys(), values)
-        }
+        channel_dict = {label: value for label, value in zip(LabJackChannels.read.keys(), values)}
         return types.SimpleNamespace(**channel_dict)
 
     async def write(self, **kwargs):
@@ -161,9 +152,7 @@ class LabJackInterface:
         if bad_labels:
             raise ValueError(f"Unrecognized labels={sorted(bad_labels)}")
         try:
-            channel_dict = {
-                LabJackChannels.write[label]: value for label, value in kwargs.items()
-            }
+            channel_dict = {LabJackChannels.write[label]: value for label, value in kwargs.items()}
             await self._run_in_thread(
                 self._blocking_write,
                 channel_dict=channel_dict,
@@ -171,8 +160,7 @@ class LabJackInterface:
             )
         except Exception as e:
             self.log.error(
-                f"Write channel_dict={channel_dict!r} "
-                f"to LabJack handle={self.handle!r} failed: {e!r}"
+                f"Write channel_dict={channel_dict!r} to LabJack handle={self.handle!r} failed: {e!r}"
             )
             raise
 
@@ -193,9 +181,7 @@ class LabJackInterface:
         """
         loop = asyncio.get_running_loop()
         curried_func = functools.partial(func, **kwargs)
-        return await asyncio.wait_for(
-            loop.run_in_executor(self._thread_pool, curried_func), timeout=timeout
-        )
+        return await asyncio.wait_for(loop.run_in_executor(self._thread_pool, curried_func), timeout=timeout)
 
     def _blocking_connect(self) -> None:
         """Connect to the LabJack.

@@ -43,15 +43,9 @@ class MockChiller(tcpip.OneClientServer):
         self.command_handlers = {
             "01": self.handle_watchdog,
             "03": self.handle_read_control_temperature,
-            "04": functools.partial(
-                self.handle_read_temperature, attr_name="supply_temperature"
-            ),
-            "07": functools.partial(
-                self.handle_read_temperature, attr_name="return_temperature"
-            ),
-            "08": functools.partial(
-                self.handle_read_temperature, attr_name="ambient_temperature"
-            ),
+            "04": functools.partial(self.handle_read_temperature, attr_name="supply_temperature"),
+            "07": functools.partial(self.handle_read_temperature, attr_name="return_temperature"),
+            "08": functools.partial(self.handle_read_temperature, attr_name="ambient_temperature"),
             "09": self.handle_read_coolant_flow_rate,
             "10": functools.partial(self.handle_read_tec_bank_current, bank=1),
             "11": functools.partial(self.handle_read_tec_bank_current, bank=2),
@@ -160,9 +154,7 @@ class MockChiller(tcpip.OneClientServer):
         return ret
 
     async def handle_read_control_temperature(self, data):
-        return format_chiller_command_value(
-            self.demand_temperature, scale=10, nchar=5, signed=True
-        )
+        return format_chiller_command_value(self.demand_temperature, scale=10, nchar=5, signed=True)
 
     async def handle_read_fan_speed(self, data, fan_num):
         if fan_num not in (1, 2, 3, 4):
@@ -172,12 +164,8 @@ class MockChiller(tcpip.OneClientServer):
 
     async def handle_read_coolant_flow_rate(self, data):
         if self.coolant_flow_rate < 0:
-            raise RuntimeError(
-                f"coolant_flow_rate={self.coolant_flow_rate} must not be negative"
-            )
-        return format_chiller_command_value(
-            self.coolant_flow_rate, scale=10, nchar=5, signed=True
-        )
+            raise RuntimeError(f"coolant_flow_rate={self.coolant_flow_rate} must not be negative")
+        return format_chiller_command_value(self.coolant_flow_rate, scale=10, nchar=5, signed=True)
 
     async def handle_read_l1_alarms(self, data):
         return self.format_mask(value=self.l1_alarms, ndig=6, name="l1_alarms")
@@ -198,9 +186,7 @@ class MockChiller(tcpip.OneClientServer):
         return format_chiller_command_value(value, scale=1000, nchar=5, signed=True)
 
     async def handle_read_tec_drive_level(self, data):
-        numstr = format_chiller_command_value(
-            value=self.tec_drive_level, scale=1, nchar=3, signed=False
-        )
+        numstr = format_chiller_command_value(value=self.tec_drive_level, scale=1, nchar=3, signed=False)
         mode_str = "C" if self.is_cooling else "H"
         return f"{numstr},{mode_str}"
 
@@ -209,9 +195,7 @@ class MockChiller(tcpip.OneClientServer):
         return format_chiller_command_value(value, scale=10, nchar=5, signed=True)
 
     async def handle_read_uptime(self, data):
-        return format_chiller_command_value(
-            value=self.uptime_minutes, scale=1, nchar=6, signed=False
-        )
+        return format_chiller_command_value(value=self.uptime_minutes, scale=1, nchar=6, signed=False)
 
     async def handle_read_warnings(self, data):
         return self.format_mask(value=self.warnings, ndig=8, name="l21_alarms")
@@ -224,9 +208,7 @@ class MockChiller(tcpip.OneClientServer):
             self.controller_state = ChillerControllerState.RUN
             self.pump_running = True
         else:
-            self.log.warning(
-                f"Unrecognized chiller state: {data}; leaving state unchanged"
-            )
+            self.log.warning(f"Unrecognized chiller state: {data}; leaving state unchanged")
 
         return data
 
@@ -242,9 +224,7 @@ class MockChiller(tcpip.OneClientServer):
 
     async def handle_watchdog(self, data):
         """Handle the watchdog command; return data"""
-        alarms_present = (
-            self.l1_alarms != 0 or self.l21_alarms != 0 or self.l22_alarms != 0
-        )
+        alarms_present = self.l1_alarms != 0 or self.l21_alarms != 0 or self.l22_alarms != 0
         warnings_present = self.warnings != 0
         return (
             f"{int(self.controller_state)}{int(self.pump_running)}"

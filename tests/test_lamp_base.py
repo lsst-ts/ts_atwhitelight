@@ -23,6 +23,7 @@ import unittest
 
 import numpy as np
 import pytest
+
 from lsst.ts import atwhitelight, salobj
 
 
@@ -67,13 +68,9 @@ class LampBaseTestCase(unittest.TestCase):
 
         # Test out of range voltage; use atol slightly smaller than margin
         # to provide safety from roundoff error.
-        for bad_voltage in np.linspace(
-            start=margin, stop=atwhitelight.VOLTS_AT_MIN_POWER - margin
-        ):
+        for bad_voltage in np.linspace(start=margin, stop=atwhitelight.VOLTS_AT_MIN_POWER - margin):
             with self.subTest(bad_voltage=bad_voltage):
                 with pytest.raises(salobj.ExpectedError):
                     atwhitelight.power_from_voltage(bad_voltage, atol=margin * 0.999)
         with pytest.raises(salobj.ExpectedError):
-            atwhitelight.power_from_voltage(
-                atwhitelight.VOLTS_AT_MAX_POWER + margin, atol=margin * 0.999
-            )
+            atwhitelight.power_from_voltage(atwhitelight.VOLTS_AT_MAX_POWER + margin, atol=margin * 0.999)
